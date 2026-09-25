@@ -55,7 +55,7 @@ osThreadId defaultTaskHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-
+static void Motor_InitAndStart(void);
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void const * argument);
@@ -108,15 +108,8 @@ void MX_FREERTOS_Init(void) {
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const * argument)
 {
-  Motor_Init(&motor_fl, &htim1, TIM_CHANNEL_1,
-           MOTOR_FL_DIR_GPIO_Port, MOTOR_FL_DIR_Pin, 1);
-  Motor_Init(&motor_fr, &htim1, TIM_CHANNEL_2,
-             MOTOR_FR_DIR_GPIO_Port, MOTOR_FR_DIR_Pin, 1);
-  Motor_Init(&motor_rl, &htim1, TIM_CHANNEL_3,
-             MOTOR_RL_DIR_GPIO_Port, MOTOR_RL_DIR_Pin, 1);
-  Motor_Init(&motor_rr, &htim1, TIM_CHANNEL_4,
-             MOTOR_RR_DIR_GPIO_Port, MOTOR_RR_DIR_Pin, 1);
   /* USER CODE BEGIN StartDefaultTask */
+  Motor_InitAndStart();
   /* Infinite loop */
   for(;;)
   {
@@ -128,6 +121,36 @@ void StartDefaultTask(void const * argument)
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+static void Motor_InitAndStart(void)
+{
+  Motor_Init(&motor_fl, &htim1, TIM_CHANNEL_1,
+       MOTOR_FL_DIR_GPIO_Port, MOTOR_FL_DIR_Pin, 1);
+  Motor_Init(&motor_fr, &htim1, TIM_CHANNEL_2,
+             MOTOR_FR_DIR_GPIO_Port, MOTOR_FR_DIR_Pin, 1);
+  Motor_Init(&motor_rl, &htim1, TIM_CHANNEL_3,
+             MOTOR_RL_DIR_GPIO_Port, MOTOR_RL_DIR_Pin, 1);
+  Motor_Init(&motor_rr, &htim1, TIM_CHANNEL_4,
+             MOTOR_RR_DIR_GPIO_Port, MOTOR_RR_DIR_Pin, 1);
 
+  if (Motor_Start(&motor_fl) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  if (Motor_Start(&motor_fr) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  if (Motor_Start(&motor_rl) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  if (Motor_Start(&motor_rr) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
 /* USER CODE END Application */
 
