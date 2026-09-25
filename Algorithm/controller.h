@@ -1,6 +1,19 @@
+/**
+******************************************************************************
+ * @file	 controller.h
+ * @author  Wang Hongxi
+ * @version V1.1.3
+ * @date    2021/7/3
+ * @brief
+ ******************************************************************************
+ * @attention
+ *
+ ******************************************************************************
+ */
 #ifndef _CONTROLLER_H
 #define _CONTROLLER_H
 #include <stdint.h>
+#include <math.h>
 
 /*========================================*/
 /* PID优化调节器部分，与PID数值配置分离，通过位与方式可自行决定是否启动 */
@@ -54,7 +67,7 @@ typedef struct
     float Last_Dout;
 
     float Ref;
-    
+
     float dt;
 
 } PID_Instance;
@@ -95,13 +108,13 @@ void PID_Init(PID_Instance* pid,PID_Init_Config_s* config);
  * @param reference     设定值
  * @return float        PID计算输出
  */
-float PIDCalculate(PID_Instance *pid, float measure, float reference);
+float PID_Calculate(PID_Instance *pid, float measure, float reference);
 
 /**
  * @brief  PID清零
  * @param  pid 指向PID结构体的指针
  */
-void PIDClear(PID_Instance *pid);
+void PID_Clear(PID_Instance *pid);
 
 
 #endif
