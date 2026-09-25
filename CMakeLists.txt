@@ -35,6 +35,8 @@ enable_language(C ASM)
 add_executable(${CMAKE_PROJECT_NAME}
         Algorithm/controller.c
         Algorithm/controller.h
+        BSP/encoder.c
+        BSP/encoder.h
 )
 
 # Add STM32CubeMX generated sources
@@ -52,7 +54,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-        /Algorithm
+        ${CMAKE_CURRENT_SOURCE_DIR}/Algorithm
+        ${CMAKE_CURRENT_SOURCE_DIR}/BSP
     # Add user defined include paths
 )
 
