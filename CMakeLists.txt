@@ -37,6 +37,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Algorithm/controller.h
         BSP/encoder.c
         BSP/encoder.h
+        BSP/motor.c
+        BSP/motor.h
 )
 
 # Add STM32CubeMX generated sources

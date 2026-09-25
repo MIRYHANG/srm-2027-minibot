@@ -25,7 +25,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "motor.h"
+#include "tim.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,7 +46,10 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-
+static Motor_t motor_fl;
+static Motor_t motor_fr;
+static Motor_t motor_rl;
+static Motor_t motor_rr;
 /* USER CODE END Variables */
 osThreadId defaultTaskHandle;
 
@@ -104,10 +108,19 @@ void MX_FREERTOS_Init(void) {
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const * argument)
 {
+  Motor_Init(&motor_fl, &htim1, TIM_CHANNEL_1,
+           MOTOR_FL_DIR_GPIO_Port, MOTOR_FL_DIR_Pin, 1);
+  Motor_Init(&motor_fr, &htim1, TIM_CHANNEL_2,
+             MOTOR_FR_DIR_GPIO_Port, MOTOR_FR_DIR_Pin, 1);
+  Motor_Init(&motor_rl, &htim1, TIM_CHANNEL_3,
+             MOTOR_RL_DIR_GPIO_Port, MOTOR_RL_DIR_Pin, 1);
+  Motor_Init(&motor_rr, &htim1, TIM_CHANNEL_4,
+             MOTOR_RR_DIR_GPIO_Port, MOTOR_RR_DIR_Pin, 1);
   /* USER CODE BEGIN StartDefaultTask */
   /* Infinite loop */
   for(;;)
   {
+
     osDelay(1);
   }
   /* USER CODE END StartDefaultTask */

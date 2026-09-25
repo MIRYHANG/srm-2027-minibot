@@ -79,6 +79,14 @@ void Error_Handler(void);
 #define ENC_RL_A_GPIO_Port GPIOD
 #define ENC_RL_B_Pin GPIO_PIN_13
 #define ENC_RL_B_GPIO_Port GPIOD
+#define MOTOR_FL_DIR_Pin GPIO_PIN_6
+#define MOTOR_FL_DIR_GPIO_Port GPIOC
+#define MOTOR_FR_DIR_Pin GPIO_PIN_7
+#define MOTOR_FR_DIR_GPIO_Port GPIOC
+#define MOTOR_RL_DIR_Pin GPIO_PIN_8
+#define MOTOR_RL_DIR_GPIO_Port GPIOC
+#define MOTOR_RR_DIR_Pin GPIO_PIN_9
+#define MOTOR_RR_DIR_GPIO_Port GPIOC
 #define ENC_RR_B_Pin GPIO_PIN_12
 #define ENC_RR_B_GPIO_Port GPIOC
 
