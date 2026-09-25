@@ -1,0 +1,37 @@
+# CLion 项目配置
+/.idea/
+
+# CLion/CMake 构建目录
+/build/
+/cmake-build-*/
+
+# CMake 本机配置
+CMakeUserPresets.json
+
+# STM32CubeMX 本地生成记录
+.mxproject
+
+# 编译中间文件
+*.o
+*.obj
+*.d
+*.dep
+
+# 固件构建产物
+*.elf
+*.hex
+*.bin
+*.map
+*.lst
+*.axf
+
+# 临时文件
+*.tmp
+*.bak
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 大体积原始调试数据
+/logs/raw/
