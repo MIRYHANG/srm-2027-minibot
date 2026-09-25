@@ -108,7 +108,7 @@ void PID_Init(PID_Instance* pid,PID_Init_Config_s* config);
  * @param reference     设定值
  * @return float        PID计算输出
  */
-float PID_Calculate(PID_Instance *pid, float measure, float reference);
+float PID_Calculate(PID_Instance *pid, float measure, float reference,float dt_s);
 
 /**
  * @brief  PID清零
