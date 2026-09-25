@@ -1,5 +1,7 @@
 # srm-2027-minibot
 
+2026-9-25完成任务
+
 2027 校内赛小车的 STM32 控制程序。项目使用 STM32G474VET6、STM32Cube HAL 和 FreeRTOS，通过 CLion/CMake 开发。
 
 ## 当前进度
