@@ -41,7 +41,8 @@ static void f_Changing_Integration_Rate(PID_Instance *pid)
 
 static void f_Integral_Limit(PID_Instance *pid)
 {
-    static float temp_Output, temp_Iout;
+    float temp_Output;
+    float temp_Iout;
     temp_Iout = pid->Iout + pid->ITerm;
     temp_Output = pid->Pout + pid->Iout + pid->Dout;
     if (fabsf(temp_Output) > pid->MaxOut)
@@ -108,6 +109,10 @@ static void f_Output_Limit(PID_Instance *pid)
  */
 void PID_Init(PID_Instance* pid,PID_Init_Config_s* config)
 {
+    if (pid == NULL || config == NULL)
+    {
+        return;
+    }
     memset(pid,0,sizeof(PID_Instance));
     memcpy(pid,config,sizeof(PID_Init_Config_s));
 }
@@ -164,7 +169,7 @@ float PID_Calculate(PID_Instance *pid, float measure, float reference,float dt_s
         // 输出限幅
         f_Output_Limit(pid);
     }
-    else // 进入死区, 则清空积分和输出
+    else // 进入死区, 输出置零并停止本次积分
     {
         pid->Output = 0;
         pid->ITerm = 0;
