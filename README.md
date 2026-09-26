@@ -1,35 +1,49 @@
 # srm-2027-minibot
 
-2026-9-25完成任务
+2027 校内赛小车的 STM32 控制程序，使用 STM32G474VET6、STM32Cube HAL、FreeRTOS 和 CMake，在 CLion 中开发。
 
-2027 校内赛小车的 STM32 控制程序。项目使用 STM32G474VET6、STM32Cube HAL 和 FreeRTOS，通过 CLion/CMake 开发。
+## 2026-09-26 开发记录
 
-## 当前进度
+- 封装 `Encoder_InitAndStart()`，初始化并启动四路编码器。
+- 将默认任务改为底盘控制任务，使用 `osDelayUntil()` 约每 10 ms 运行一次，并根据实际 tick 间隔计算 `dt_s`。
+- 初始化四个车轮的速度 PID，封装四轮及单轮的编码器更新、PID 计算流程。
+- 编写麦克纳姆轮解算模块：将底盘的前后速度 `vx`、左右速度 `vy`、旋转速度 `wz` 换算为四轮目标 RPM。当前约定 `vx` 正数向前、`vy` 正数向左、`wz` 正数逆时针。
+- 编写电脑端测试，检查向前、向左、逆时针旋转及无效轮半径四种情况；测试通过。
+- 将麦轮解算接入底盘任务，计算结果写入四轮目标转速。
 
-- 已编写四轮电机的 PWM、方向控制及编码器模块
-- 已编写 PID 控制器模块
-- 已在 FreeRTOS 任务中初始化并启动四个电机
-- 编码器测速与 PID 闭环尚未接入任务
-- 硬件尚未到齐，电机方向、编码器参数及实际运行效果均未验证
+目前底盘指令固定为零；PID 只进行计算，**输出尚未施加到电机**。代码通过编译和公式测试，不代表已经完成实物验证。
 
 ## 代码结构
 
-- `BSP/`：电机、编码器等硬件相关代码
-- `Algorithm/`：PID 等控制算法
-- `Core/`：STM32CubeMX 生成的初始化代码及应用任务
+- `BSP/`：电机 PWM、方向控制和编码器模块
+- `Algorithm/`：PID 控制器与麦轮解算
+- `Core/`：STM32CubeMX 生成代码及 FreeRTOS 应用任务
+- `Test/test_mecanum.c`：电脑端麦轮解算测试，不参与 STM32 固件编译
 - `XiaoSai.ioc`：STM32CubeMX 外设配置
 
-## 编译
+## 编译与测试
 
-用 CLion 打开项目，选择 Debug 配置后构建。编译通过不代表已经完成硬件测试。
+固件编译：
 
-## 下一步
+```powershell
+cmake --build --preset Debug
+```
 
-- 根据电机参数确定编码器每圈计数
-- 接入周期性测速与 PID 速度闭环
-- 收到硬件后逐个验证电机方向、编码器方向和急停行为
+电脑端麦轮测试：
 
-## 参考项目
+```powershell
+gcc -std=c11 -Wall -Wextra -IAlgorithm Test/test_mecanum.c Algorithm/mecanum.c -o build/test_mecanum.exe -lm
+.\build\test_mecanum.exe
+```
 
-PID 模块参考了湖南大学岳麓战队的
-[HNUYueLuRM/basic_framework](https://github.com/HNUYueLuRM/basic_framework)。
+测试中的底盘尺寸仅用于核对公式，**不是实车参数**。
+
+## TODO：待确认的参数
+
+- [ ] 测量轮半径、前后轮中心距、左右轮中心距，替换当前为零的底盘尺寸。
+- [ ] 确认输出轴转一圈对应的编码器计数；当前 `COUNT_PER_REV = 10` 尚未验证。
+- [ ] 逐轮确认编码器方向；当前四轮共用 `DIRECTION_SIGN = -1`。
+- [ ] 逐轮确认电机正方向；当前四轮的方向修正均为 `+1`。
+- [ ] 根据实测速度抖动与响应效果调整编码器滤波时间；当前为 `0.01 s`。
+- [ ] 核对麦轮实际安装方向是否符合当前 X 型解算公式。
+- [ ] 硬件联调后整定 PID 的 `Kp`、`Ki`、`Kd`；当前均为零。
