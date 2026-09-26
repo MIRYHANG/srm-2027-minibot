@@ -29,6 +29,7 @@
 #include "tim.h"
 #include "encoder.h"
 #include "controller.h"
+#include "mecanum.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -67,6 +68,12 @@ static float target_rpm_fl = 0.0f;
 static float target_rpm_fr = 0.0f;
 static float target_rpm_rl = 0.0f;
 static float target_rpm_rr = 0.0f;
+
+static MecanumGeometry_t chassis_geometry = {
+  .wheel_radius_m = 0.0f,  // TODO：实测轮半径
+  .wheelbase_m = 0.0f,     // TODO：前后轮中心距
+  .track_width_m = 0.0f,   // TODO：左右轮中心距
+};
 /* USER CODE END Variables */
 osThreadId ChassisControlTHandle;
 
@@ -80,6 +87,8 @@ static void SpeedPID_InitAll(void);
 static void ChassisSpeed_Update(float dt_s);
 static void WheelSpeed_Update(Encoder_t *encoder, PID_Instance *pid,
                               float target_rpm, float dt_s);
+static void Chassis_UpdateTargetRpm(float vx_mps, float vy_mps,
+                                    float wz_radps);
 /* USER CODE END FunctionPrototypes */
 
 void StartChassisControlTask(void const * argument);
@@ -148,6 +157,7 @@ void StartChassisControlTask(void const * argument)
     float dt_s = (float)(now - last_sample) / (float)configTICK_RATE_HZ;
     last_sample = now;
 
+    Chassis_UpdateTargetRpm(0.0f,0.0f,0.0f);
     ChassisSpeed_Update(dt_s);
   }
   /* USER CODE END StartChassisControlTask */
@@ -268,6 +278,27 @@ static void WheelSpeed_Update(Encoder_t *encoder, PID_Instance *pid,
 {
   Encoder_Update(encoder, dt_s);
   (void)PID_Calculate(pid, Encoder_GetSpeedRpm(encoder), target_rpm, dt_s);
+}
+
+/**
+ * @brief 根据底盘期望速度计算四个车轮的目标转速。
+ * @param vx_mps 期望前后速度，正数表示向前，单位为米/秒。
+ * @param vy_mps 期望左右速度，正数表示向左，单位为米/秒。
+ * @param wz_radps 期望旋转角速度，正数表示逆时针，单位为弧度/秒。
+ * @note 计算结果只写入四轮目标 RPM，不直接驱动电机；底盘尺寸无效时目标转速为零。
+ */
+static void Chassis_UpdateTargetRpm(float vx_mps, float vy_mps,
+                                    float wz_radps)
+{
+  MecanumWheelRpm_t wheels;
+
+  Mecanum_CalculateWheelRpm(&chassis_geometry,
+                            vx_mps, vy_mps, wz_radps, &wheels);
+
+  target_rpm_fl = wheels.fl;
+  target_rpm_fr = wheels.fr;
+  target_rpm_rl = wheels.rl;
+  target_rpm_rr = wheels.rr;
 }
 /* USER CODE END Application */
 
