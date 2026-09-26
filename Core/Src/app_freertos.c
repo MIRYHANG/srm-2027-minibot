@@ -62,14 +62,24 @@ static PID_Instance speed_pid_fl;
 static PID_Instance speed_pid_fr;
 static PID_Instance speed_pid_rl;
 static PID_Instance speed_pid_rr;
+
+static float target_rpm_fl = 0.0f;
+static float target_rpm_fr = 0.0f;
+static float target_rpm_rl = 0.0f;
+static float target_rpm_rr = 0.0f;
 /* USER CODE END Variables */
 osThreadId ChassisControlTHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
+
+/*------------------函数封装层-----------------------*/
 static void Motor_InitAndStart(void);
 static void Encoder_InitAndStart(void);
-static void SpeedPID_InitAll();
+static void SpeedPID_InitAll(void);
+static void ChassisSpeed_Update(float dt_s);
+static void WheelSpeed_Update(Encoder_t *encoder, PID_Instance *pid,
+                              float target_rpm, float dt_s);
 /* USER CODE END FunctionPrototypes */
 
 void StartChassisControlTask(void const * argument);
@@ -115,7 +125,7 @@ void MX_FREERTOS_Init(void) {
 
 /* USER CODE BEGIN Header_StartChassisControlTask */
 /**
-  * @brief  Function implementing the ChassisControlT thread.
+  * @brief  初始化底盘模块，并周期性更新四轮速度控制。
   * @param  argument: Not used
   * @retval None
   */
@@ -125,6 +135,7 @@ void StartChassisControlTask(void const * argument)
   /* USER CODE BEGIN StartChassisControlTask */
   Motor_InitAndStart();
   Encoder_InitAndStart();
+  SpeedPID_InitAll();
 
   uint32_t last_wake = osKernelSysTick();
   uint32_t last_sample = last_wake;
@@ -137,16 +148,16 @@ void StartChassisControlTask(void const * argument)
     float dt_s = (float)(now - last_sample) / (float)configTICK_RATE_HZ;
     last_sample = now;
 
-    Encoder_Update(&encode_fl, dt_s);
-    Encoder_Update(&encode_fr, dt_s);
-    Encoder_Update(&encode_rl, dt_s);
-    Encoder_Update(&encode_rr, dt_s);
+    ChassisSpeed_Update(dt_s);
   }
   /* USER CODE END StartChassisControlTask */
 }
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+/**
+ * @brief 绑定四个电机的 PWM 通道和方向引脚，并以零输出启动 PWM。
+ */
 static void Motor_InitAndStart(void)
 {
   Motor_Init(&motor_fl, &htim1, TIM_CHANNEL_1,
@@ -179,6 +190,10 @@ static void Motor_InitAndStart(void)
   }
 }
 
+/**
+ * @brief 配置并启动四个车轮的编码器定时器。
+ * @note 每圈计数和方向修正需用实物验证后，才能将测速结果用于控制。
+ */
 static void Encoder_InitAndStart(void)
 {
   Encoder_Init(&encode_fl, &htim2,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
@@ -204,7 +219,11 @@ static void Encoder_InitAndStart(void)
   }
 }
 
-static void SpeedPID_InitAll()
+/**
+ * @brief 初始化四个车轮的速度 PID 控制器。
+ * @note 当前 PID 增益为零，仅作占位，不会驱动电机。
+ */
+static void SpeedPID_InitAll(void)
 {
   PID_Init_Config_s config = {
     .Kp = 0.0f,
@@ -217,6 +236,38 @@ static void SpeedPID_InitAll()
   PID_Init(&speed_pid_fr, &config);
   PID_Init(&speed_pid_rl, &config);
   PID_Init(&speed_pid_rr, &config);
+}
+
+/**
+ * @brief 更新四轮编码器测量值和速度 PID 计算结果。
+ * @param dt_s 距离上次更新的实际时间，单位为秒。
+ */
+static void ChassisSpeed_Update(float dt_s)
+{
+  if (dt_s <= 0.0f)
+  {
+    return;
+  }
+
+  WheelSpeed_Update(&encode_fl, &speed_pid_fl, target_rpm_fl, dt_s);
+  WheelSpeed_Update(&encode_fr, &speed_pid_fr, target_rpm_fr, dt_s);
+  WheelSpeed_Update(&encode_rl, &speed_pid_rl, target_rpm_rl, dt_s);
+  WheelSpeed_Update(&encode_rr, &speed_pid_rr, target_rpm_rr, dt_s);
+}
+
+/**
+ * @brief 更新单个车轮的编码器测量值，并计算速度 PID。
+ * @param encoder 该车轮的编码器实例。
+ * @param pid 该车轮的速度 PID 实例。
+ * @param target_rpm 目标车轮转速，单位为 RPM。
+ * @param dt_s 距离上次更新的实际时间，单位为秒。
+ * @note 当前仅计算 PID，尚未将输出施加到电机。
+ */
+static void WheelSpeed_Update(Encoder_t *encoder, PID_Instance *pid,
+                              float target_rpm, float dt_s)
+{
+  Encoder_Update(encoder, dt_s);
+  (void)PID_Calculate(pid, Encoder_GetSpeedRpm(encoder), target_rpm, dt_s);
 }
 /* USER CODE END Application */
 
