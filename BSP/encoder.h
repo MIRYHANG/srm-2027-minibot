@@ -9,6 +9,10 @@
 
 #include "tim.h"
 
+#define COUNT_PER_REV 10
+#define DIRECTION_SIGN -1
+#define SPEED_FILTER_RC_S 0.01
+
 typedef struct
 {
     TIM_HandleTypeDef *htim;

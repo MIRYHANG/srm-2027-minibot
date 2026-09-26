@@ -28,6 +28,7 @@
 #include "motor.h"
 #include "tim.h"
 #include "encoder.h"
+#include "controller.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,6 +57,11 @@ static Encoder_t encode_fl;
 static Encoder_t encode_fr;
 static Encoder_t encode_rl;
 static Encoder_t encode_rr;
+
+static PID_Instance speed_pid_fl;
+static PID_Instance speed_pid_fr;
+static PID_Instance speed_pid_rl;
+static PID_Instance speed_pid_rr;
 /* USER CODE END Variables */
 osThreadId ChassisControlTHandle;
 
@@ -63,6 +69,7 @@ osThreadId ChassisControlTHandle;
 /* USER CODE BEGIN FunctionPrototypes */
 static void Motor_InitAndStart(void);
 static void Encoder_InitAndStart(void);
+static void SpeedPID_InitAll();
 /* USER CODE END FunctionPrototypes */
 
 void StartChassisControlTask(void const * argument);
@@ -174,10 +181,10 @@ static void Motor_InitAndStart(void)
 
 static void Encoder_InitAndStart(void)
 {
-  Encoder_Init(&encode_fl, &htim2,1,1,0);
-  Encoder_Init(&encode_fr, &htim3,1,1,0);
-  Encoder_Init(&encode_rl, &htim4,1,1,0);
-  Encoder_Init(&encode_rr, &htim5,1,1,0);
+  Encoder_Init(&encode_fl, &htim2,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
+  Encoder_Init(&encode_fr, &htim3,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
+  Encoder_Init(&encode_rl, &htim4,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
+  Encoder_Init(&encode_rr, &htim5,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
 
   if (Encoder_Start(&encode_fl) != HAL_OK)
   {
@@ -195,6 +202,21 @@ static void Encoder_InitAndStart(void)
   {
     Error_Handler();
   }
+}
+
+static void SpeedPID_InitAll()
+{
+  PID_Init_Config_s config = {
+    .Kp = 0.0f,
+    .Ki = 0.0f,
+    .Kd = 0.0f,
+    .MaxOut = 1.0f,
+    .Improve = PID_IMPROVE_NONE,
+  };
+  PID_Init(&speed_pid_fl,&config);
+  PID_Init(&speed_pid_fr, &config);
+  PID_Init(&speed_pid_rl, &config);
+  PID_Init(&speed_pid_rr, &config);
 }
 /* USER CODE END Application */
 
