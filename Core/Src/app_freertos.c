@@ -118,11 +118,19 @@ void StartDefaultTask(void const * argument)
   /* USER CODE BEGIN StartDefaultTask */
   Motor_InitAndStart();
   Encoder_InitAndStart();
+  TickType_t last_wake = xTaskGetTickCount();
   /* Infinite loop */
   for(;;)
   {
+    osDelay(10);
+    TickType_t now_tick = xTaskGetTickCount();
+    float dt_s = (float)(now_tick - last_wake) / (float)configTICK_RATE_HZ;
+    last_wake = now_tick;
 
-    osDelay(1);
+    Encoder_Update(&encode_fl, dt_s);
+    Encoder_Update(&encode_fr, dt_s);
+    Encoder_Update(&encode_rl, dt_s);
+    Encoder_Update(&encode_rr, dt_s);
   }
   /* USER CODE END StartDefaultTask */
 }
