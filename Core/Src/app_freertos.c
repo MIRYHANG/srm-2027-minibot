@@ -27,6 +27,7 @@
 /* USER CODE BEGIN Includes */
 #include "motor.h"
 #include "tim.h"
+#include "encoder.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,12 +51,18 @@ static Motor_t motor_fl;
 static Motor_t motor_fr;
 static Motor_t motor_rl;
 static Motor_t motor_rr;
+
+static Encoder_t encode_fl;
+static Encoder_t encode_fr;
+static Encoder_t encode_rl;
+static Encoder_t encode_rr;
 /* USER CODE END Variables */
 osThreadId defaultTaskHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
 static void Motor_InitAndStart(void);
+static void Encoder_InitAndStart(void);
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void const * argument);
@@ -110,6 +117,7 @@ void StartDefaultTask(void const * argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
   Motor_InitAndStart();
+  Encoder_InitAndStart();
   /* Infinite loop */
   for(;;)
   {
@@ -148,6 +156,31 @@ static void Motor_InitAndStart(void)
   }
 
   if (Motor_Start(&motor_rr) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+static void Encoder_InitAndStart(void)
+{
+  Encoder_Init(&encode_fl, &htim2,1,1,0);
+  Encoder_Init(&encode_fr, &htim3,1,1,0);
+  Encoder_Init(&encode_rl, &htim4,1,1,0);
+  Encoder_Init(&encode_rr, &htim5,1,1,0);
+
+  if (Encoder_Start(&encode_fl) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (Encoder_Start(&encode_fr) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (Encoder_Start(&encode_rl) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (Encoder_Start(&encode_rr) != HAL_OK)
   {
     Error_Handler();
   }
