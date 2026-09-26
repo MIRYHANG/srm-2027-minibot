@@ -57,7 +57,7 @@ static Encoder_t encode_fr;
 static Encoder_t encode_rl;
 static Encoder_t encode_rr;
 /* USER CODE END Variables */
-osThreadId defaultTaskHandle;
+osThreadId ChassisControlTHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -65,7 +65,7 @@ static void Motor_InitAndStart(void);
 static void Encoder_InitAndStart(void);
 /* USER CODE END FunctionPrototypes */
 
-void StartDefaultTask(void const * argument);
+void StartChassisControlTask(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -96,9 +96,9 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
-  defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+  /* definition and creation of ChassisControlT */
+  osThreadDef(ChassisControlT, StartChassisControlTask, osPriorityNormal, 0, 256);
+  ChassisControlTHandle = osThreadCreate(osThread(ChassisControlT), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -106,33 +106,36 @@ void MX_FREERTOS_Init(void) {
 
 }
 
-/* USER CODE BEGIN Header_StartDefaultTask */
+/* USER CODE BEGIN Header_StartChassisControlTask */
 /**
-  * @brief  Function implementing the defaultTask thread.
+  * @brief  Function implementing the ChassisControlT thread.
   * @param  argument: Not used
   * @retval None
   */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void const * argument)
+/* USER CODE END Header_StartChassisControlTask */
+void StartChassisControlTask(void const * argument)
 {
-  /* USER CODE BEGIN StartDefaultTask */
+  /* USER CODE BEGIN StartChassisControlTask */
   Motor_InitAndStart();
   Encoder_InitAndStart();
-  TickType_t last_wake = xTaskGetTickCount();
+
+  uint32_t last_wake = osKernelSysTick();
+  uint32_t last_sample = last_wake;
   /* Infinite loop */
   for(;;)
   {
-    osDelay(10);
-    TickType_t now_tick = xTaskGetTickCount();
-    float dt_s = (float)(now_tick - last_wake) / (float)configTICK_RATE_HZ;
-    last_wake = now_tick;
+    osDelayUntil(&last_wake, 10);
+
+    uint32_t now = osKernelSysTick();
+    float dt_s = (float)(now - last_sample) / (float)configTICK_RATE_HZ;
+    last_sample = now;
 
     Encoder_Update(&encode_fl, dt_s);
     Encoder_Update(&encode_fr, dt_s);
     Encoder_Update(&encode_rl, dt_s);
     Encoder_Update(&encode_rr, dt_s);
   }
-  /* USER CODE END StartDefaultTask */
+  /* USER CODE END StartChassisControlTask */
 }
 
 /* Private application code --------------------------------------------------*/
