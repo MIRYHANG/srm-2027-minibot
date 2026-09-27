@@ -28,9 +28,7 @@ void Encoder_Init(Encoder_t *encoder,
     encoder->htim = htim;
     encoder->count_per_rev = count_per_rev;
     encoder->direction_sign = direction_sign < 0 ? -1 : 1;
-    encoder->speed_filter_rc_s = speed_filter_rc_s > 0.0f
-                                     ? speed_filter_rc_s
-                                     : 0.0f;
+    encoder->speed_filter_rc_s = speed_filter_rc_s > 0.0f ? speed_filter_rc_s : 0.0f;
 }
 
 HAL_StatusTypeDef Encoder_Start(Encoder_t *encoder)
