@@ -45,6 +45,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Application/remote_input.c
         Protocol/srm_protocol.c
         Protocol/srm_protocol.h
+        Application/remote_phone.c
+        Application/remote_phone.h
 )
 
 # Add STM32CubeMX generated sources
