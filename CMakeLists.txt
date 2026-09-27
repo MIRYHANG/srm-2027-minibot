@@ -42,6 +42,7 @@ add_executable(${CMAKE_PROJECT_NAME}
         Algorithm/mecanum.c
         Algorithm/mecanum.h
         Application/remote_input.h
+        Application/remote_input.c
 )
 
 # Add STM32CubeMX generated sources

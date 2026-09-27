@@ -33,9 +33,9 @@ typedef struct
 
 typedef struct
 {
-    RemoteState_t phone;
-    RemoteState_t handheld;
-    RemoteSource_t selected;
+    RemoteState_t phone;            // 手机最近发来的命令和接收时间
+    RemoteState_t handheld;         // 自制手柄最近发来的命令和接收时间
+    RemoteSource_t selected;        // 当前选择手机、手柄，还是都不选
 } RemoteInput_t;
 
 void RemoteInput_Init(RemoteInput_t *input);
