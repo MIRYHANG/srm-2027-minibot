@@ -43,6 +43,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Algorithm/mecanum.h
         Application/remote_input.h
         Application/remote_input.c
+        Protocol/srm_protocol.c
+        Protocol/srm_protocol.h
 )
 
 # Add STM32CubeMX generated sources
@@ -63,6 +65,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/Algorithm
         ${CMAKE_CURRENT_SOURCE_DIR}/BSP
         ${CMAKE_CURRENT_SOURCE_DIR}/Application
+        ${CMAKE_CURRENT_SOURCE_DIR}/Protocol
     # Add user defined include paths
 )
 
