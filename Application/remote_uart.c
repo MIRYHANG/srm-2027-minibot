@@ -58,8 +58,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     // 用来记录：发送到队列后，是否需要唤醒更高优先级任务
     BaseType_t higher_priority_task_woken = pdFALSE;
 
-    if ((xQueueSendFromISR(rx_queue, &item, &higher_priority_task_woken) != pdPASS)
-        || (HAL_UART_Receive_IT(&huart2, &rx_byte, 1U) != HAL_OK))
+    if (xQueueSendFromISR(rx_queue, &item,
+                     &higher_priority_task_woken) != pdPASS)
+    {
+        rx_fault = true;
+    }
+
+    if (HAL_UART_Receive_IT(&huart2, &rx_byte, 1U) != HAL_OK)
     {
         rx_fault = true;
     }
