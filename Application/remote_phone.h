@@ -20,4 +20,13 @@
 bool RemotePhone_Convert(const srm_control_state_t *raw,
                          RemoteCommand_t *command);
 
+/**
+ * @brief 处理一个手机遥控字节；收到完整有效的控制帧后更新手机状态。
+ * @return 成功更新命令返回 true；数据未收齐或无效返回 false。
+ */
+bool RemotePhone_ProcessByte(srm_parser_t *parser,
+                             RemoteInput_t *input,
+                             uint8_t byte,
+                             uint32_t now_ms);
+
 #endif //XIAOSAI_REMOTE_PHONE_H
