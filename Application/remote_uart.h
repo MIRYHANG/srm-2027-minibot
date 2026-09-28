@@ -34,4 +34,15 @@ bool RemoteUart_Start(void);
  */
 bool RemoteUart_Read(RemoteUartByte_t *item);
 
+/** @brief 查询串口接收是否出现异常。 */
+bool RemoteUart_HasFault(void);
+
+/**
+ * @brief 丢弃缓存并重新启动接收，仅供任务调用。
+ * @return 恢复成功返回 true，失败返回 false。
+ * @note 调用前，任务必须清空手机旧命令并重置协议解析器。
+ *       本实现用于当前单字节中断接收方案，不用于 DMA 接收。
+ */
+bool RemoteUart_Recover(void);
+
 #endif //XIAOSAI_REMOTE_UART_H

@@ -84,3 +84,60 @@ bool RemoteUart_Read(RemoteUartByte_t *item)
     // 等待时间为 0：队列为空就立即返回，不阻塞任务。
     return xQueueReceive(rx_queue, item, 0) == pdPASS;
 }
+
+bool RemoteUart_HasFault(void)
+{
+    return rx_fault;
+}
+
+bool RemoteUart_Recover(void)
+{
+    if (rx_queue == NULL)
+    {
+        return false;
+    }
+
+    HAL_StatusTypeDef status;
+
+    // 暂时阻止 USART2 中断插入，避免恢复过程被打断
+    taskENTER_CRITICAL();
+
+    // 停止当前接收；HAL 同时清除接收错误标志和残留数据
+    status = HAL_UART_AbortReceive(&huart2);
+
+    if (status == HAL_OK)
+    {
+        // 已经丢过字节，旧缓存不能再继续拼帧
+        xQueueReset(rx_queue);
+
+        rx_fault = false;
+
+        // 重新等待一个字节
+        status = HAL_UART_Receive_IT(&huart2, &rx_byte, 1U);
+
+        if (status != HAL_OK)
+        {
+            rx_fault = true;
+        }
+    }
+    else
+    {
+        rx_fault = true;
+    }
+
+    taskEXIT_CRITICAL();
+
+    return status == HAL_OK;
+}
+
+/**
+ * @brief HAL 检测到串口通信错误时调用。
+ * @note 中断中只标记异常，恢复由任务完成。
+ */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart == &huart2)
+    {
+        rx_fault = true;
+    }
+}
