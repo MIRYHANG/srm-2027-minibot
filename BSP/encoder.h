@@ -1,5 +1,5 @@
 //
-// Created by YZH on 2026/9/25.
+// Created by YZH on 2026/9/25
 //
 
 #ifndef XIAOSAI_ENCODER_H

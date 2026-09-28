@@ -1,5 +1,5 @@
 //
-// Created by YZH on 2026/9/25.
+// Created by YZH on 2026/9/25
 //
 
 #include "encoder.h"
@@ -80,7 +80,7 @@ void Encoder_Update(Encoder_t *encoder, float dt_s)
 
     now_count = __HAL_TIM_GET_COUNTER(encoder->htim);
 
-    // TIM3/TIM4 是 16 位，TIM2/TIM5 是 32 位；减法按对应位宽自然处理回绕。
+    // TIM3/TIM4 是 16 位，TIM2/TIM5 是 32 位；减法按对应位宽自然处理回绕
     if (__HAL_TIM_GET_AUTORELOAD(encoder->htim) <= 0xFFFFU)
     {
         delta_count = (int32_t)(int16_t)((uint16_t)now_count -

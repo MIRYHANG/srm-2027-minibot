@@ -8,14 +8,14 @@
 extern "C" {
 #endif
 
-/* “SRM校内赛”线协议的固定参数。修改这些值会导致 App 与下位机不兼容。 */
+/* “SRM校内赛”线协议的固定参数修改这些值会导致 App 与下位机不兼容 */
 #define SRM_PROTOCOL_VERSION 4u
 #define SRM_SYNC_1 0xA5u
 #define SRM_SYNC_2 0x5Au
 #define SRM_MAX_PAYLOAD 64u
 #define SRM_MAX_FRAME (SRM_MAX_PAYLOAD + 6u)
 
-/* VTYPE 字节低 4 位中的消息类型。 */
+/* VTYPE 字节低 4 位中的消息类型 */
 typedef enum {
     SRM_TYPE_CONTROL = 0,
     SRM_TYPE_HELLO = 1,
@@ -27,7 +27,7 @@ typedef enum {
     SRM_TYPE_PRO_CONTROL = 7
 } srm_type_t;
 
-/* 每向解析器送入一个字节后可能得到的结果。负值表示当前候选帧无效。 */
+/* 每向解析器送入一个字节后可能得到的结果负值表示当前候选帧无效 */
 typedef enum {
     SRM_PARSE_NONE = 0,
     SRM_PARSE_FRAME = 1,
@@ -37,9 +37,9 @@ typedef enum {
 } srm_parse_result_t;
 
 /*
- * CRC 校验通过后输出的帧视图。
+ * CRC 校验通过后输出的帧视图
  * payload 指向解析器内部缓存，只能在下一次调用 srm_parser_push() 前使用；
- * 如果要放入任务队列异步处理，必须先复制 payload。
+ * 如果要放入任务队列异步处理，必须先复制 payload
  */
 typedef struct {
     uint8_t version;
@@ -49,7 +49,7 @@ typedef struct {
     const uint8_t *payload;
 } srm_frame_t;
 
-/* CONTROL 消息解码后的完整遥控器状态。四轴统一使用 -512..511。 */
+/* CONTROL 消息解码后的完整遥控器状态四轴统一使用 -512..511 */
 typedef struct {
     int16_t left_x;
     int16_t left_y;
@@ -60,7 +60,7 @@ typedef struct {
     uint8_t dpad;     /* 0=center, 1=up, 2=down, 3=left, 4=right */
 } srm_control_state_t;
 
-/* PRO_CONTROL 的 24 位按键位图。bit17..bit23 保留，收到非零值时整帧无效。 */
+/* PRO_CONTROL 的 24 位按键位图bit17..bit23 保留，收到非零值时整帧无效 */
 #define SRM_PRO_BUTTON_A (1ul << 0)
 #define SRM_PRO_BUTTON_B (1ul << 1)
 #define SRM_PRO_BUTTON_X (1ul << 2)
@@ -80,7 +80,7 @@ typedef struct {
 #define SRM_PRO_BUTTON_DPAD_RIGHT (1ul << 16)
 #define SRM_PRO_BUTTON_VALID_MASK 0x01FFFFul
 
-/* 双摇杆为 -512..511，扳机保留完整的 0..255 HID 线性范围。 */
+/* 双摇杆为 -512..511，扳机保留完整的 0..255 HID 线性范围 */
 typedef struct {
     int16_t left_x;
     int16_t left_y;
@@ -92,8 +92,8 @@ typedef struct {
 } srm_pro_control_state_t;
 
 /*
- * 流式解析器状态。UART、SPP 和 BLE 都可能拆包或粘包，因此不要按一次接收
- * 对应一帧来处理，而应为收到的每个字节调用一次 srm_parser_push()。
+ * 流式解析器状态UART、SPP 和 BLE 都可能拆包或粘包，因此不要按一次接收
+ * 对应一帧来处理，而应为收到的每个字节调用一次 srm_parser_push()
  */
 typedef struct {
     uint8_t body[SRM_MAX_PAYLOAD + 4u];
@@ -102,29 +102,29 @@ typedef struct {
     uint8_t expected;
 } srm_parser_t;
 
-/* 上电或重新连接后调用一次，清空收包状态。 */
+/* 上电或重新连接后调用一次，清空收包状态 */
 void srm_parser_init(srm_parser_t *parser);
 
-/* 送入一个串口字节；返回 SRM_PARSE_FRAME 时 frame 中包含一帧完整消息。 */
+/* 送入一个串口字节；返回 SRM_PARSE_FRAME 时 frame 中包含一帧完整消息 */
 srm_parse_result_t srm_parser_push(srm_parser_t *parser, uint8_t byte, srm_frame_t *frame);
 
-/* 计算协议使用的 CRC-8/ATM：多项式 0x07，初值 0x00。 */
+/* 计算协议使用的 CRC-8/ATM：多项式 0x07，初值 0x00 */
 uint8_t srm_crc8_atm(const uint8_t *data, size_t length);
 
 /*
- * 构建任意类型的完整发送帧。成功返回 payload_length + 6，参数或容量无效返回 0。
+ * 构建任意类型的完整发送帧成功返回 payload_length + 6，参数或容量无效返回 0
  */
 size_t srm_build_frame(uint8_t *output, size_t capacity, uint8_t type, uint8_t sequence,
                        const uint8_t *payload, uint8_t payload_length);
 
-/* 将控制状态编码成 CONTROL 帧，主要用于测试或下位机模拟发送。 */
+/* 将控制状态编码成 CONTROL 帧，主要用于测试或下位机模拟发送 */
 size_t srm_build_control(uint8_t *output, size_t capacity, uint8_t sequence,
                          const srm_control_state_t *state);
 
-/* 校验并解码 CONTROL 帧；成功返回 1，类型、长度或字段范围错误返回 0。 */
+/* 校验并解码 CONTROL 帧；成功返回 1，类型、长度或字段范围错误返回 0 */
 int srm_decode_control(const srm_frame_t *frame, srm_control_state_t *state);
 
-/* PRO_CONTROL 成功返回 1。HELLO 不是 CONTROL/PRO_CONTROL 的解码前置条件。 */
+/* PRO_CONTROL 成功返回 1HELLO 不是 CONTROL/PRO_CONTROL 的解码前置条件 */
 size_t srm_build_pro_control(uint8_t *output, size_t capacity, uint8_t sequence,
                              const srm_pro_control_state_t *state);
 int srm_decode_pro_control(const srm_frame_t *frame, srm_pro_control_state_t *state);

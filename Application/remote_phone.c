@@ -1,5 +1,5 @@
 //
-// Created by YZH on 2026/9/27.
+// Created by YZH on 2026/9/27
 //
 
 #include "remote_phone.h"
@@ -15,7 +15,7 @@ static bool PhoneAxisValid(int16_t value)
 
 static float PhoneNormalizeAxis(int16_t value)
 {
-    // 原协议负端是 -512，正端是 511；分别除以对应端点。
+    // 原协议负端是 -512，正端是 511；分别除以对应端点
     return value < 0 ? (float)value / 512.0f : (float)value / 511.0f;
 }
 
@@ -27,7 +27,7 @@ bool RemotePhone_Convert(const srm_control_state_t *raw,
         return false;
     }
 
-    // 转换失败时，输出先保持为安全的全零命令。
+    // 转换失败时，输出先保持为安全的全零命令
     *command = (RemoteCommand_t){0};
 
     if (raw == NULL ||

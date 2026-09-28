@@ -84,6 +84,12 @@ static MecanumGeometry_t chassis_geometry = {
 static srm_parser_t phone_parser;       // 保存手机协议解析进度
 static RemoteInput_t remote_input;      // 保存两种遥控来源的状态
 static RemoteCommand_t remote_command;  // 当前安全遥控命令
+
+// TODO：后续根据底盘能力和调试结果设置
+// 当前保持为零，暂不产生运动目标
+#define CHASSIS_MAX_VX_MPS   0.0f  // 最大前后速度，m/s
+#define CHASSIS_MAX_VY_MPS   0.0f  // 最大横移速度，m/s
+#define CHASSIS_MAX_WZ_RADPS 0.0f  // 最大旋转角速度，rad/s
 /* USER CODE END Variables */
 osThreadId ChassisControlTHandle;
 
@@ -101,6 +107,7 @@ static void Chassis_UpdateTargetRpm(float vx_mps, float vy_mps,
                                     float wz_radps);
 static void PhoneRemote_InitAndStart(void);
 static void PhoneRemote_Update(void);
+static void Chassis_UpdateFromRemote(const RemoteCommand_t *command);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -147,7 +154,7 @@ void MX_FREERTOS_Init(void) {
 
 /* USER CODE BEGIN Header_StartChassisControlTask */
 /**
-  * @brief  初始化底盘模块，并周期性更新四轮速度控制。
+  * @brief  初始化底盘模块，并周期性更新四轮速度控制
   * @param  argument: Not used
   * @retval None
   */
@@ -174,7 +181,7 @@ void StartChassisControlTask(void const * argument)
 
     PhoneRemote_Update();
 
-    Chassis_UpdateTargetRpm(0.0f,0.0f,0.0f);
+    Chassis_UpdateFromRemote(&remote_command);
     ChassisSpeed_Update(dt_s);
   }
   /* USER CODE END StartChassisControlTask */
@@ -183,7 +190,7 @@ void StartChassisControlTask(void const * argument)
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
 /**
- * @brief 绑定四个电机的 PWM 通道和方向引脚，并以零输出启动 PWM。
+ * @brief 绑定四个电机的 PWM 通道和方向引脚，并以零输出启动 PWM
  */
 static void Motor_InitAndStart(void)
 {
@@ -218,8 +225,8 @@ static void Motor_InitAndStart(void)
 }
 
 /**
- * @brief 配置并启动四个车轮的编码器定时器。
- * @note 每圈计数和方向修正需用实物验证后，才能将测速结果用于控制。
+ * @brief 配置并启动四个车轮的编码器定时器
+ * @note 每圈计数和方向修正需用实物验证后，才能将测速结果用于控制
  */
 static void Encoder_InitAndStart(void)
 {
@@ -247,8 +254,8 @@ static void Encoder_InitAndStart(void)
 }
 
 /**
- * @brief 初始化四个车轮的速度 PID 控制器。
- * @note 当前 PID 增益为零，仅作占位，不会驱动电机。
+ * @brief 初始化四个车轮的速度 PID 控制器
+ * @note 当前 PID 增益为零，仅作占位，不会驱动电机
  */
 static void SpeedPID_InitAll(void)
 {
@@ -266,8 +273,8 @@ static void SpeedPID_InitAll(void)
 }
 
 /**
- * @brief 更新四轮编码器测量值和速度 PID 计算结果。
- * @param dt_s 距离上次更新的实际时间，单位为秒。
+ * @brief 更新四轮编码器测量值和速度 PID 计算结果
+ * @param dt_s 距离上次更新的实际时间，单位为秒
  */
 static void ChassisSpeed_Update(float dt_s)
 {
@@ -283,12 +290,12 @@ static void ChassisSpeed_Update(float dt_s)
 }
 
 /**
- * @brief 更新单个车轮的编码器测量值，并计算速度 PID。
- * @param encoder 该车轮的编码器实例。
- * @param pid 该车轮的速度 PID 实例。
- * @param target_rpm 目标车轮转速，单位为 RPM。
- * @param dt_s 距离上次更新的实际时间，单位为秒。
- * @note 当前仅计算 PID，尚未将输出施加到电机。
+ * @brief 更新单个车轮的编码器测量值，并计算速度 PID
+ * @param encoder 该车轮的编码器实例
+ * @param pid 该车轮的速度 PID 实例
+ * @param target_rpm 目标车轮转速，单位为 RPM
+ * @param dt_s 距离上次更新的实际时间，单位为秒
+ * @note 当前仅计算 PID，尚未将输出施加到电机
  */
 static void WheelSpeed_Update(Encoder_t *encoder, PID_Instance *pid,
                               float target_rpm, float dt_s)
@@ -298,11 +305,11 @@ static void WheelSpeed_Update(Encoder_t *encoder, PID_Instance *pid,
 }
 
 /**
- * @brief 根据底盘期望速度计算四个车轮的目标转速。
- * @param vx_mps 期望前后速度，正数表示向前，单位为米/秒。
- * @param vy_mps 期望左右速度，正数表示向左，单位为米/秒。
- * @param wz_radps 期望旋转角速度，正数表示逆时针，单位为弧度/秒。
- * @note 计算结果只写入四轮目标 RPM，不直接驱动电机；底盘尺寸无效时目标转速为零。
+ * @brief 根据底盘期望速度计算四个车轮的目标转速
+ * @param vx_mps 期望前后速度，正数表示向前，单位为米/秒
+ * @param vy_mps 期望左右速度，正数表示向左，单位为米/秒
+ * @param wz_radps 期望旋转角速度，正数表示逆时针，单位为弧度/秒
+ * @note 计算结果只写入四轮目标 RPM，不直接驱动电机；底盘尺寸无效时目标转速为零
  */
 static void Chassis_UpdateTargetRpm(float vx_mps, float vy_mps,
                                     float wz_radps)
@@ -319,8 +326,8 @@ static void Chassis_UpdateTargetRpm(float vx_mps, float vy_mps,
 }
 
 /**
- * @brief 初始化手机遥控状态、解析器和接收队列，并启动接收。
- * @note 在任务启动阶段调用一次。
+ * @brief 初始化手机遥控状态、解析器和接收队列，并启动接收
+ * @note 在任务启动阶段调用一次
  */
 static void PhoneRemote_InitAndStart(void)
 {
@@ -342,8 +349,8 @@ static void PhoneRemote_InitAndStart(void)
 }
 
 /**
- * @brief 处理手机接收数据，更新安全遥控命令。
- * @note 只在当前底盘任务中调用，不直接驱动电机。
+ * @brief 处理手机接收数据，更新安全遥控命令
+ * @note 只在当前底盘任务中调用，不直接驱动电机
  */
 static void PhoneRemote_Update(void)
 {
@@ -389,6 +396,28 @@ static void PhoneRemote_Update(void)
   remote_command = RemoteInput_GetSafe(&remote_input,
                                        HAL_GetTick(),
                                        PHONE_TIMEOUT_MS);
+}
+
+/**
+ * @brief 将安全遥控命令换算为底盘速度，再计算四轮目标转速
+ * @param command 遥控命令，只读
+ * @note 仅更新目标转速，不直接设置电机输出
+ */
+static void Chassis_UpdateFromRemote(const RemoteCommand_t *command)
+{
+  if (command == NULL || !command->enabled || command->stop_requested)
+  {
+    Chassis_UpdateTargetRpm(0.0f, 0.0f, 0.0f);
+    return;
+  }
+
+  // 遥控量是 -1～1，乘以速度上限得到实际速度
+  float vx_mps = command->forward * CHASSIS_MAX_VX_MPS;
+  float vy_mps = command->left * CHASSIS_MAX_VY_MPS;
+  float wz_radps = command->turn * CHASSIS_MAX_WZ_RADPS;
+
+  // 将底盘速度换算为四个轮子的目标 RPM
+  Chassis_UpdateTargetRpm(vx_mps, vy_mps, wz_radps);
 }
 /* USER CODE END Application */
 

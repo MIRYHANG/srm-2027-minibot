@@ -1,5 +1,5 @@
 //
-// Created by YZH on 2026/9/27.
+// Created by YZH on 2026/9/27
 //
 
 #include "srm_protocol.h"
@@ -7,8 +7,8 @@
 #include <string.h>
 
 /*
- * CRC-8/ATM 按最高位优先逐位计算。校验范围由调用方决定；协议规定发送帧时
- * 从 VTYPE 算到 Payload 末尾，不包含 A5 5A 帧头，也不包含 CRC 字节本身。
+ * CRC-8/ATM 按最高位优先逐位计算校验范围由调用方决定；协议规定发送帧时
+ * 从 VTYPE 算到 Payload 末尾，不包含 A5 5A 帧头，也不包含 CRC 字节本身
  */
 uint8_t srm_crc8_atm(const uint8_t *data, size_t length) {
     uint8_t crc = 0u;
@@ -25,13 +25,13 @@ uint8_t srm_crc8_atm(const uint8_t *data, size_t length) {
 
 void srm_parser_init(srm_parser_t *parser) {
     if (parser == NULL) return;
-    /* 清零后 state=0，解析器从“等待 0xA5”状态开始。 */
+    /* 清零后 state=0，解析器从“等待 0xA5”状态开始 */
     memset(parser, 0, sizeof(*parser));
 }
 
 /*
- * 当前候选帧出错后重新同步。如果导致错误的字节本身恰好是 0xA5，就直接把它
- * 当作下一帧的第一个同步字节，避免漏掉紧随错误帧之后的有效帧。
+ * 当前候选帧出错后重新同步如果导致错误的字节本身恰好是 0xA5，就直接把它
+ * 当作下一帧的第一个同步字节，避免漏掉紧随错误帧之后的有效帧
  */
 static void reset_parser(srm_parser_t *parser, uint8_t byte) {
     parser->state = byte == SRM_SYNC_1 ? 1u : 0u;
@@ -44,14 +44,14 @@ srm_parse_result_t srm_parser_push(srm_parser_t *parser, uint8_t byte, srm_frame
     uint8_t received_crc;
     if (parser == NULL || frame == NULL) return SRM_PARSE_BAD_LENGTH;
 
-    /* 状态 0：忽略噪声，直到发现同步字节 0xA5。 */
+    /* 状态 0：忽略噪声，直到发现同步字节 0xA5 */
     if (parser->state == 0u) {
         if (byte == SRM_SYNC_1) parser->state = 1u;
         return SRM_PARSE_NONE;
     }
     /*
-     * 状态 1：等待第二个同步字节 0x5A。连续收到 0xA5 时继续停在本状态，
-     * 这样 A5 A5 5A 也能从第二个 A5 正确开始解析。
+     * 状态 1：等待第二个同步字节 0x5A连续收到 0xA5 时继续停在本状态，
+     * 这样 A5 A5 5A 也能从第二个 A5 正确开始解析
      */
     if (parser->state == 1u) {
         if (byte == SRM_SYNC_2) {
@@ -64,15 +64,15 @@ srm_parse_result_t srm_parser_push(srm_parser_t *parser, uint8_t byte, srm_frame
         return SRM_PARSE_NONE;
     }
 
-    /* 状态 2：帧头已经确认，依次缓存 VTYPE、SEQ、LEN、Payload 和 CRC。 */
+    /* 状态 2：帧头已经确认，依次缓存 VTYPE、SEQ、LEN、Payload 和 CRC */
     parser->body[parser->position++] = byte;
 
-    /* v4 不接受其他线协议版本。 */
+    /* v4 不接受其他线协议版本 */
     if (parser->position == 1u && (byte >> 4) != SRM_PROTOCOL_VERSION) {
         reset_parser(parser, byte);
         return SRM_PARSE_BAD_VERSION;
     }
-    /* 收到 LEN 后才能计算本帧还需接收多少字节。 */
+    /* 收到 LEN 后才能计算本帧还需接收多少字节 */
     if (parser->position == 3u) {
         length = parser->body[2];
         if (length > SRM_MAX_PAYLOAD) {
@@ -81,22 +81,22 @@ srm_parse_result_t srm_parser_push(srm_parser_t *parser, uint8_t byte, srm_frame
         }
         parser->expected = (uint8_t)(3u + length + 1u);
     }
-    /* 长度尚未知或整帧尚未收齐时，等待下一个串口字节。 */
+    /* 长度尚未知或整帧尚未收齐时，等待下一个串口字节 */
     if (parser->expected == 0u || parser->position < parser->expected) return SRM_PARSE_NONE;
 
-    /* 收齐后先校验 CRC，失败的帧绝不能更新控制状态。 */
+    /* 收齐后先校验 CRC，失败的帧绝不能更新控制状态 */
     received_crc = parser->body[parser->expected - 1u];
     if (srm_crc8_atm(parser->body, parser->expected - 1u) != received_crc) {
         reset_parser(parser, byte);
         return SRM_PARSE_BAD_CRC;
     }
-    /* CRC 正确：输出帧字段。payload 是 body 内部的一段视图，不发生动态分配。 */
+    /* CRC 正确：输出帧字段payload 是 body 内部的一段视图，不发生动态分配 */
     frame->version = parser->body[0] >> 4;
     frame->type = parser->body[0] & 0x0Fu;
     frame->sequence = parser->body[1];
     frame->length = parser->body[2];
     frame->payload = &parser->body[3];
-    /* 当前帧已交付，立即回到等待下一帧头的状态。 */
+    /* 当前帧已交付，立即回到等待下一帧头的状态 */
     parser->state = 0u;
     parser->position = 0u;
     parser->expected = 0u;
@@ -106,18 +106,18 @@ srm_parse_result_t srm_parser_push(srm_parser_t *parser, uint8_t byte, srm_frame
 size_t srm_build_frame(uint8_t *output, size_t capacity, uint8_t type, uint8_t sequence,
                        const uint8_t *payload, uint8_t payload_length) {
     size_t wire_length = (size_t)payload_length + 6u;
-    /* 先检查所有边界，防止发送缓存越界或构造出协议不允许的帧。 */
+    /* 先检查所有边界，防止发送缓存越界或构造出协议不允许的帧 */
     if (output == NULL || capacity < wire_length || type > 0x0Fu
             || payload_length > SRM_MAX_PAYLOAD
             || (payload_length > 0u && payload == NULL)) return 0u;
-    /* 按线格式依次写入帧头、VTYPE、序号、长度和 Payload。 */
+    /* 按线格式依次写入帧头、VTYPE、序号、长度和 Payload */
     output[0] = SRM_SYNC_1;
     output[1] = SRM_SYNC_2;
     output[2] = (uint8_t)((SRM_PROTOCOL_VERSION << 4) | type);
     output[3] = sequence;
     output[4] = payload_length;
     if (payload_length > 0u) memcpy(&output[5], payload, payload_length);
-    /* CRC 从 output[2] 的 VTYPE 开始计算，正好覆盖 VTYPE、SEQ、LEN 和 Payload。 */
+    /* CRC 从 output[2] 的 VTYPE 开始计算，正好覆盖 VTYPE、SEQ、LEN 和 Payload */
     output[wire_length - 1u] = srm_crc8_atm(&output[2], (size_t)payload_length + 3u);
     return wire_length;
 }
@@ -193,7 +193,7 @@ int srm_decode_control(const srm_frame_t *frame, srm_control_state_t *state) {
     state->buttons = (uint8_t)(controls & 0x000Fu);
     state->switches = (uint8_t)((controls >> 4) & 0x003Fu);
     state->dpad = (uint8_t)((controls >> 10) & 0x0007u);
-    /* 最后验证各字段范围；返回 0 时调用方必须保持原控制状态或进入安全状态。 */
+    /* 最后验证各字段范围；返回 0 时调用方必须保持原控制状态或进入安全状态 */
     return state->dpad <= 4u;
 }
 

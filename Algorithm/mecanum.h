@@ -1,5 +1,5 @@
 //
-// Created by YZH on 2026/9/26.
+// Created by YZH on 2026/9/26
 //
 
 #ifndef XIAOSAI_MECANUM_H
@@ -21,12 +21,12 @@ typedef struct
 } MecanumWheelRpm_t;
 
 /**
- * @brief 将底盘速度换算为四个车轮的目标转速。
- * @param vx_mps 向前后速度，米/秒。    其中vx > 0表示向前
- * @param vy_mps 向左右速度，米/秒。    其中vy > 0表示向左
- * @param wz_radps 逆时针旋转角速度，弧度/秒。
- * @param result 输出的四轮目标转速，单位 RPM。
- * @note 暂按俯视呈 X 型的麦轮安装方式计算；实物安装方向需核对。
+ * @brief 将底盘速度换算为四个车轮的目标转速
+ * @param vx_mps 向前后速度，米/秒    其中vx > 0表示向前
+ * @param vy_mps 向左右速度，米/秒    其中vy > 0表示向左
+ * @param wz_radps 逆时针旋转角速度，弧度/秒
+ * @param result 输出的四轮目标转速，单位 RPM
+ * @note 暂按俯视呈 X 型的麦轮安装方式计算；实物安装方向需核对
  */
 void Mecanum_CalculateWheelRpm(const MecanumGeometry_t *geometry,
                                float vx_mps, float vy_mps, float wz_radps,

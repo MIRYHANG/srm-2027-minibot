@@ -1,5 +1,5 @@
 //
-// Created by YZH on 2026/9/27.
+// Created by YZH on 2026/9/27
 //
 #include <assert.h>
 #include "remote_input.h"

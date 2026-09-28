@@ -1,5 +1,5 @@
 //
-// Created by YZH on 2026/9/26.
+// Created by YZH on 2026/9/26
 //
 #include <assert.h>
 #include <math.h>

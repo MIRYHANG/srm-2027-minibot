@@ -1,5 +1,5 @@
 //
-// Created by YZH on 2026/9/28.
+// Created by YZH on 2026/9/28
 //
 
 #include "remote_uart.h"
@@ -12,7 +12,7 @@
 
 static QueueHandle_t rx_queue = NULL;
 static uint8_t rx_byte;
-static volatile bool rx_fault = false;  // 记录接收异常，后续由任务处理。
+static volatile bool rx_fault = false;  // 记录接收异常，后续由任务处理
 
 bool RemoteUart_Init(void)
 {
@@ -40,8 +40,8 @@ bool RemoteUart_Start(void)
 }
 
 /**
- * @brief 串口接收完成回调，由 HAL 在中断中调用。
- * @note 只暂存字节并继续接收，不解析协议、不控制电机。
+ * @brief 串口接收完成回调，由 HAL 在中断中调用
+ * @note 只暂存字节并继续接收，不解析协议、不控制电机
  */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
@@ -80,8 +80,8 @@ bool RemoteUart_Read(RemoteUartByte_t *item)
         return false;
     }
 
-    // 从队列头取出一项，复制到 item 指向的结构体。
-    // 等待时间为 0：队列为空就立即返回，不阻塞任务。
+    // 从队列头取出一项，复制到 item 指向的结构体
+    // 等待时间为 0：队列为空就立即返回，不阻塞任务
     return xQueueReceive(rx_queue, item, 0) == pdPASS;
 }
 
@@ -131,8 +131,8 @@ bool RemoteUart_Recover(void)
 }
 
 /**
- * @brief HAL 检测到串口通信错误时调用。
- * @note 中断中只标记异常，恢复由任务完成。
+ * @brief HAL 检测到串口通信错误时调用
+ * @note 中断中只标记异常，恢复由任务完成
  */
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {

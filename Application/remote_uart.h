@@ -1,5 +1,5 @@
 //
-// Created by YZH on 2026/9/28.
+// Created by YZH on 2026/9/28
 //
 
 #ifndef XIAOSAI_REMOTE_UART_H
@@ -15,33 +15,33 @@ typedef struct
 } RemoteUartByte_t;
 
 /**
- * @brief 创建串口接收队列，启动接收前调用一次。
- * @return 创建成功返回 true，失败返回 false。
+ * @brief 创建串口接收队列，启动接收前调用一次
+ * @return 创建成功返回 true，失败返回 false
  */
 bool RemoteUart_Init(void);
 
 /**
- * @brief 启动 USART2 单字节中断接收。
- * @return 启动成功返回 true；未初始化或启动失败返回 false。
- * @note 初始化队列后，在任务启动阶段调用一次。
+ * @brief 启动 USART2 单字节中断接收
+ * @return 启动成功返回 true；未初始化或启动失败返回 false
+ * @note 初始化队列后，在任务启动阶段调用一次
  */
 bool RemoteUart_Start(void);
 
 /**
- * @brief 非阻塞地取出一个接收记录，仅供任务调用。
- * @param item 输出收到的字节和接收时间；返回 false 时不要使用其内容。
- * @return 取出成功返回 true；队列为空、参数无效或接收异常返回 false。
+ * @brief 非阻塞地取出一个接收记录，仅供任务调用
+ * @param item 输出收到的字节和接收时间；返回 false 时不要使用其内容
+ * @return 取出成功返回 true；队列为空、参数无效或接收异常返回 false
  */
 bool RemoteUart_Read(RemoteUartByte_t *item);
 
-/** @brief 查询串口接收是否出现异常。 */
+/** @brief 查询串口接收是否出现异常 */
 bool RemoteUart_HasFault(void);
 
 /**
- * @brief 丢弃缓存并重新启动接收，仅供任务调用。
- * @return 恢复成功返回 true，失败返回 false。
- * @note 调用前，任务必须清空手机旧命令并重置协议解析器。
- *       本实现用于当前单字节中断接收方案，不用于 DMA 接收。
+ * @brief 丢弃缓存并重新启动接收，仅供任务调用
+ * @return 恢复成功返回 true，失败返回 false
+ * @note 调用前，任务必须清空手机旧命令并重置协议解析器
+ *       本实现用于当前单字节中断接收方案，不用于 DMA 接收
  */
 bool RemoteUart_Recover(void);
 
