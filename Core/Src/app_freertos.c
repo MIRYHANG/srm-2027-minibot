@@ -30,6 +30,8 @@
 #include "encoder.h"
 #include "controller.h"
 #include "mecanum.h"
+#include "remote_uart.h"
+#include "remote_phone.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -39,7 +41,11 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+// 暂定超时阈值，后续根据实际发送周期确认
+#define PHONE_TIMEOUT_MS 200U
 
+// 限制每周期处理量，避免接收处理一直占用底盘任务
+#define PHONE_RX_BUDGET 64U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -74,6 +80,10 @@ static MecanumGeometry_t chassis_geometry = {
   .wheelbase_m = 0.0f,     // TODO：前后轮中心距
   .track_width_m = 0.0f,   // TODO：左右轮中心距
 };
+
+static srm_parser_t phone_parser;       // 保存手机协议解析进度
+static RemoteInput_t remote_input;      // 保存两种遥控来源的状态
+static RemoteCommand_t remote_command;  // 当前安全遥控命令
 /* USER CODE END Variables */
 osThreadId ChassisControlTHandle;
 
@@ -89,6 +99,9 @@ static void WheelSpeed_Update(Encoder_t *encoder, PID_Instance *pid,
                               float target_rpm, float dt_s);
 static void Chassis_UpdateTargetRpm(float vx_mps, float vy_mps,
                                     float wz_radps);
+static void PhoneRemote_InitAndStart(void);
+static void PhoneRemote_Update(void);
+
 /* USER CODE END FunctionPrototypes */
 
 void StartChassisControlTask(void const * argument);
@@ -146,6 +159,8 @@ void StartChassisControlTask(void const * argument)
   Encoder_InitAndStart();
   SpeedPID_InitAll();
 
+  PhoneRemote_InitAndStart();
+
   uint32_t last_wake = osKernelSysTick();
   uint32_t last_sample = last_wake;
   /* Infinite loop */
@@ -156,6 +171,8 @@ void StartChassisControlTask(void const * argument)
     uint32_t now = osKernelSysTick();
     float dt_s = (float)(now - last_sample) / (float)configTICK_RATE_HZ;
     last_sample = now;
+
+    PhoneRemote_Update();
 
     Chassis_UpdateTargetRpm(0.0f,0.0f,0.0f);
     ChassisSpeed_Update(dt_s);
@@ -299,6 +316,79 @@ static void Chassis_UpdateTargetRpm(float vx_mps, float vy_mps,
   target_rpm_fr = wheels.fr;
   target_rpm_rl = wheels.rl;
   target_rpm_rr = wheels.rr;
+}
+
+/**
+ * @brief 初始化手机遥控状态、解析器和接收队列，并启动接收。
+ * @note 在任务启动阶段调用一次。
+ */
+static void PhoneRemote_InitAndStart(void)
+{
+  RemoteInput_Init(&remote_input);
+  RemoteInput_Select(&remote_input, REMOTE_SOURCE_PHONE);
+  srm_parser_init(&phone_parser);
+
+  remote_command = (RemoteCommand_t){0};
+
+  if (!RemoteUart_Init())
+  {
+    Error_Handler();
+  }
+
+  if (!RemoteUart_Start())
+  {
+    Error_Handler();
+  }
+}
+
+/**
+ * @brief 处理手机接收数据，更新安全遥控命令。
+ * @note 只在当前底盘任务中调用，不直接驱动电机。
+ */
+static void PhoneRemote_Update(void)
+{
+  // 默认禁止运动，只有全部检查通过才给出有效命令
+  remote_command = (RemoteCommand_t){0};
+
+  if (RemoteUart_HasFault())
+  {
+    remote_input.phone = (RemoteState_t){0};
+    srm_parser_init(&phone_parser);
+
+    if (!RemoteUart_Recover())
+    {
+      return;
+    }
+
+    return;
+  }
+
+  RemoteUartByte_t item;
+
+  for (uint32_t count = 0U; count < PHONE_RX_BUDGET; count++)
+  {
+    // 队列空了或者出现异常，就结束本次读取
+    if (!RemoteUart_Read(&item))
+    {
+      break;
+    }
+
+    // 使用字节实际到达的时间，而不是当前处理时间
+    RemotePhone_ProcessByte(&phone_parser, &remote_input, item.byte, item.received_ms);
+  }
+
+  // 处理过程中也可能出现中断异常，不能使用刚解析的命令
+  if (RemoteUart_HasFault())
+  {
+    remote_input.phone = (RemoteState_t){0};
+    srm_parser_init(&phone_parser);
+    return;
+  }
+
+  // 未收到有效帧、超时、未使能或请求停机时，返回零命令
+  remote_command = RemoteInput_GetSafe(&remote_input,
+                                       HAL_GetTick(),
+                                       PHONE_TIMEOUT_MS);
 }
 /* USER CODE END Application */
 
