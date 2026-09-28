@@ -27,4 +27,11 @@ bool RemoteUart_Init(void);
  */
 bool RemoteUart_Start(void);
 
+/**
+ * @brief 非阻塞地取出一个接收记录，仅供任务调用。
+ * @param item 输出收到的字节和接收时间；返回 false 时不要使用其内容。
+ * @return 取出成功返回 true；队列为空、参数无效或接收异常返回 false。
+ */
+bool RemoteUart_Read(RemoteUartByte_t *item);
+
 #endif //XIAOSAI_REMOTE_UART_H

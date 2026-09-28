@@ -72,3 +72,15 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     // 如果刚才唤醒了更高优先级任务，请求在中断退出时切换
     portYIELD_FROM_ISR(higher_priority_task_woken);
 }
+
+bool RemoteUart_Read(RemoteUartByte_t *item)
+{
+    if (rx_queue == NULL || item == NULL || rx_fault)
+    {
+        return false;
+    }
+
+    // 从队列头取出一项，复制到 item 指向的结构体。
+    // 等待时间为 0：队列为空就立即返回，不阻塞任务。
+    return xQueueReceive(rx_queue, item, 0) == pdPASS;
+}
