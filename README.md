@@ -17,7 +17,6 @@
 - [x] 实现接收异常标记、错误回调及任务侧恢复，恢复时停止接收、丢弃缓存并重新启动
 - [x] 实现 `PhoneRemote_InitAndStart()` 和 `PhoneRemote_Update()`，接入现有底盘周期任务
 - [x] 实现 `Chassis_UpdateFromRemote()`，将归一化遥控量转换为底盘速度，再计算四轮目标 RPM
-- [x] 清理自写代码和协议文件注释中的句号，保留小数点、文件名及厂商版权注释
 
 ### 当前数据链路
 
