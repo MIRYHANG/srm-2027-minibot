@@ -186,6 +186,12 @@ void StartChassisControlTask(void const * argument)
     if (!remote_command.enabled || remote_command.stop_requested)
     {
       Chassis_Stop();
+
+      // 停机期间继续采样，保持计数变化与 dt_s 对应
+      Encoder_Update(&encode_fl, dt_s);
+      Encoder_Update(&encode_fr, dt_s);
+      Encoder_Update(&encode_rl, dt_s);
+      Encoder_Update(&encode_rr, dt_s);
     }
     else
     {
