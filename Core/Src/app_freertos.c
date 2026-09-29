@@ -101,13 +101,14 @@ static void Motor_InitAndStart(void);
 static void Encoder_InitAndStart(void);
 static void SpeedPID_InitAll(void);
 static void ChassisSpeed_Update(float dt_s);
-static void WheelSpeed_Update(Encoder_t *encoder, PID_Instance *pid,
-                              float target_rpm, float dt_s);
+static void WheelSpeed_Update(Motor_t *motor, Encoder_t *encoder,
+                              PID_Instance *pid, float target_rpm, float dt_s);
 static void Chassis_UpdateTargetRpm(float vx_mps, float vy_mps,
                                     float wz_radps);
 static void PhoneRemote_InitAndStart(void);
 static void PhoneRemote_Update(void);
 static void Chassis_UpdateFromRemote(const RemoteCommand_t *command);
+static void Chassis_Stop(void);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -168,6 +169,7 @@ void StartChassisControlTask(void const * argument)
 
   PhoneRemote_InitAndStart();
 
+
   uint32_t last_wake = osKernelSysTick();
   uint32_t last_sample = last_wake;
   /* Infinite loop */
@@ -181,14 +183,46 @@ void StartChassisControlTask(void const * argument)
 
     PhoneRemote_Update();
 
-    Chassis_UpdateFromRemote(&remote_command);
-    ChassisSpeed_Update(dt_s);
+    if (!remote_command.enabled || remote_command.stop_requested)
+    {
+      Chassis_Stop();
+    }
+    else
+    {
+      Chassis_UpdateFromRemote(&remote_command);
+      ChassisSpeed_Update(dt_s);
+    }
   }
   /* USER CODE END StartChassisControlTask */
 }
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+
+/**
+ * @brief 将四轮目标和 PWM 输出归零，并清除 PID 动态状态
+ */
+static void Chassis_Stop(void)
+{
+  // 清空四轮目标转速
+  target_rpm_fl = 0.0f;
+  target_rpm_fr = 0.0f;
+  target_rpm_rl = 0.0f;
+  target_rpm_rr = 0.0f;
+
+  // 将四个电机的 PWM 输出设为零
+  Motor_Stop(&motor_fl);
+  Motor_Stop(&motor_fr);
+  Motor_Stop(&motor_rl);
+  Motor_Stop(&motor_rr);
+
+  // 清除积分和历史状态，保留 PID 配置参数
+  PID_Clear(&speed_pid_fl);
+  PID_Clear(&speed_pid_fr);
+  PID_Clear(&speed_pid_rl);
+  PID_Clear(&speed_pid_rr);
+}
+
 /**
  * @brief 绑定四个电机的 PWM 通道和方向引脚，并以零输出启动 PWM
  */
@@ -230,9 +264,9 @@ static void Motor_InitAndStart(void)
  */
 static void Encoder_InitAndStart(void)
 {
-  Encoder_Init(&encode_fl, &htim2,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
+  Encoder_Init(&encode_fl, &htim4,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
   Encoder_Init(&encode_fr, &htim3,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
-  Encoder_Init(&encode_rl, &htim4,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
+  Encoder_Init(&encode_rl, &htim2,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
   Encoder_Init(&encode_rr, &htim5,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
 
   if (Encoder_Start(&encode_fl) != HAL_OK)
@@ -283,10 +317,10 @@ static void ChassisSpeed_Update(float dt_s)
     return;
   }
 
-  WheelSpeed_Update(&encode_fl, &speed_pid_fl, target_rpm_fl, dt_s);
-  WheelSpeed_Update(&encode_fr, &speed_pid_fr, target_rpm_fr, dt_s);
-  WheelSpeed_Update(&encode_rl, &speed_pid_rl, target_rpm_rl, dt_s);
-  WheelSpeed_Update(&encode_rr, &speed_pid_rr, target_rpm_rr, dt_s);
+  WheelSpeed_Update(&motor_fl, &encode_fl, &speed_pid_fl, target_rpm_fl, dt_s);
+  WheelSpeed_Update(&motor_fr, &encode_fr, &speed_pid_fr, target_rpm_fr, dt_s);
+  WheelSpeed_Update(&motor_rl, &encode_rl, &speed_pid_rl, target_rpm_rl, dt_s);
+  WheelSpeed_Update(&motor_rr, &encode_rr, &speed_pid_rr, target_rpm_rr, dt_s);
 }
 
 /**
@@ -297,11 +331,12 @@ static void ChassisSpeed_Update(float dt_s)
  * @param dt_s 距离上次更新的实际时间，单位为秒
  * @note 当前仅计算 PID，尚未将输出施加到电机
  */
-static void WheelSpeed_Update(Encoder_t *encoder, PID_Instance *pid,
-                              float target_rpm, float dt_s)
+static void WheelSpeed_Update(Motor_t *motor, Encoder_t *encoder,
+                              PID_Instance *pid, float target_rpm, float dt_s)
 {
   Encoder_Update(encoder, dt_s);
-  (void)PID_Calculate(pid, Encoder_GetSpeedRpm(encoder), target_rpm, dt_s);
+  float output = PID_Calculate(pid, Encoder_GetSpeedRpm(encoder), target_rpm, dt_s);
+  Motor_SetOutput(motor, output);
 }
 
 /**

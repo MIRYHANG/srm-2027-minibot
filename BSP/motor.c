@@ -3,6 +3,7 @@
 //
 
 #include "motor.h"
+#include <math.h>
 
 /**
  * @brief 绑定一个电机的 PWM 通道和方向引脚
@@ -69,7 +70,7 @@ void Motor_SetOutput(Motor_t* motor, float output)
         output = -1.0f;
     }
 
-    if (output == 0.0f)
+    if (fabsf(output) < 1e-6f)
     {
         Motor_Stop(motor);
         return;

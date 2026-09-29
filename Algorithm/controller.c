@@ -113,8 +113,18 @@ void PID_Init(PID_Instance* pid,PID_Init_Config_s* config)
     {
         return;
     }
-    memset(pid,0,sizeof(PID_Instance));
-    memcpy(pid,config,sizeof(PID_Init_Config_s));
+    memset(pid, 0, sizeof(PID_Instance));
+    pid->Kp                = config->Kp;
+    pid->Ki                = config->Ki;
+    pid->Kd                = config->Kd;
+    pid->MaxOut            = config->MaxOut;
+    pid->DeadBand          = config->DeadBand;
+    pid->Improve           = config->Improve;
+    pid->IntegralLimit     = config->IntegralLimit;
+    pid->CoefA             = config->CoefA;
+    pid->CoefB             = config->CoefB;
+    pid->Output_LPF_RC     = config->Output_LPF_RC;
+    pid->Derivative_LPF_RC = config->Derivative_LPF_RC;
 }
 
 /**
