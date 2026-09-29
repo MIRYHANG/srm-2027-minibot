@@ -29,7 +29,7 @@ bool Servo_Init(Servo_t *servo,
     {
         return false;
     }
-    
+
     // 默认认为通道不合法
     bool channel_valid = false;
 
@@ -64,6 +64,28 @@ bool Servo_Init(Servo_t *servo,
     servo->channel = channel;
     servo->min_pulse_us = min_pulse_us;
     servo->max_pulse_us = max_pulse_us;
+
+    return true;
+}
+
+bool Servo_SetPulseUs(Servo_t *servo, uint16_t pulse_us)
+{
+    if (servo == NULL || servo->htim == NULL)
+    {
+        return false;
+    }
+
+    if (pulse_us > servo->max_pulse_us || pulse_us < servo->min_pulse_us)
+    {
+        return false;
+    }
+
+    if ((uint32_t)pulse_us > __HAL_TIM_GET_AUTORELOAD(servo->htim))
+    {
+        return false;
+    }
+
+    __HAL_TIM_SET_COMPARE(servo->htim, servo->channel, pulse_us);
 
     return true;
 }
