@@ -43,4 +43,11 @@ bool Servo_SetPulseUs(Servo_t *servo, uint16_t pulse_us);
  */
 HAL_StatusTypeDef Servo_Start(Servo_t *servo, uint16_t initial_pulse_us);
 
+/**
+ * @brief 停止这个舵机通道的 PWM 输出
+ * @return 成功返回 HAL_OK，对象无效返回 HAL_ERROR
+ * @note 仅停止控制信号，不切断舵机电源
+ */
+HAL_StatusTypeDef Servo_Stop(Servo_t *servo);
+
 #endif //XIAOSAI_SERVO_H

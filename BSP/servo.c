@@ -101,3 +101,14 @@ HAL_StatusTypeDef Servo_Start(Servo_t *servo, uint16_t initial_pulse_us)
     // 开启这个舵机对应通道的 PWM 输出
     return HAL_TIM_PWM_Start(servo->htim, servo->channel);
 }
+
+HAL_StatusTypeDef Servo_Stop(Servo_t *servo)
+{
+    if (servo == NULL || servo->htim == NULL)
+    {
+        return HAL_ERROR;
+    }
+
+    // 停止对应通道的 PWM 输出
+    return HAL_TIM_PWM_Stop(servo->htim, servo->channel);
+}
