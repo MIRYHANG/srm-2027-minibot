@@ -49,6 +49,10 @@ add_executable(${CMAKE_PROJECT_NAME}
         Application/remote_phone.h
         Application/remote_uart.c
         Application/remote_uart.h
+        BSP/oled.c
+        BSP/oled.h
+        BSP/servo.c
+        BSP/servo.h
 )
 
 # Add STM32CubeMX generated sources
