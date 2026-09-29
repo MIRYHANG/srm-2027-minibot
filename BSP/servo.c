@@ -89,3 +89,15 @@ bool Servo_SetPulseUs(Servo_t *servo, uint16_t pulse_us)
 
     return true;
 }
+
+HAL_StatusTypeDef Servo_Start(Servo_t *servo, uint16_t initial_pulse_us)
+{
+    // 检查对象并设置初始脉宽
+    if (!Servo_SetPulseUs(servo, initial_pulse_us))
+    {
+        return HAL_ERROR;
+    }
+
+    // 开启这个舵机对应通道的 PWM 输出
+    return HAL_TIM_PWM_Start(servo->htim, servo->channel);
+}

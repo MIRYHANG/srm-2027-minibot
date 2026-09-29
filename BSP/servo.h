@@ -35,4 +35,12 @@ bool Servo_Init(Servo_t *servo,
  */
 bool Servo_SetPulseUs(Servo_t *servo, uint16_t pulse_us);
 
+/**
+ * @brief 设置初始脉宽并启动 PWM 输出
+ * @param initial_pulse_us 启动时的控制脉宽，单位 μs
+ * @return 成功返回 HAL_OK，否则返回错误状态
+ * @note 舵机对象初始化成功后调用一次
+ */
+HAL_StatusTypeDef Servo_Start(Servo_t *servo, uint16_t initial_pulse_us);
+
 #endif //XIAOSAI_SERVO_H
