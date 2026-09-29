@@ -50,4 +50,12 @@ HAL_StatusTypeDef Servo_Start(Servo_t *servo, uint16_t initial_pulse_us);
  */
 HAL_StatusTypeDef Servo_Stop(Servo_t *servo);
 
+/**
+ * @brief 按配置的脉宽范围设置相对目标位置
+ * @param position 相对位置，范围 0 到 1
+ * @return 设置成功返回 true，参数无效返回 false
+ * @note 调用前必须成功初始化并启动舵机
+ */
+bool Servo_SetPosition(Servo_t *servo, float position);
+
 #endif //XIAOSAI_SERVO_H

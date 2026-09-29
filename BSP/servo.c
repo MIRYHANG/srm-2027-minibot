@@ -112,3 +112,25 @@ HAL_StatusTypeDef Servo_Stop(Servo_t *servo)
     // 停止对应通道的 PWM 输出
     return HAL_TIM_PWM_Stop(servo->htim, servo->channel);
 }
+
+bool Servo_SetPosition(Servo_t *servo, float position)
+{
+    if (servo == NULL || servo->htim == NULL)
+    {
+        return false;
+    }
+
+    if (!(position >= 0.0f && position <= 1.0f))
+    {
+        return false;
+    }
+
+    // 计算两个端点之间的脉宽差
+    float range_us = (float)(servo->max_pulse_us - servo->min_pulse_us);
+
+    // 最小脉宽加上移动比例对应的脉宽增量
+    uint16_t pulse_us = (uint16_t)(servo->min_pulse_us + position * range_us);
+
+    // 调用已有函数更新 PWM 脉宽
+    return Servo_SetPulseUs(servo, pulse_us);
+}
