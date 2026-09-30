@@ -33,6 +33,7 @@
 #include "remote_uart.h"
 #include "remote_phone.h"
 #include "servo.h"
+#include "arm_control.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -77,6 +78,8 @@ static Servo_t servo_3;
 static Servo_t servo_4;
 static Servo_t servo_5;
 static Servo_t servo_6;
+
+static ArmControl_t arm_control;
 
 static float target_rpm_fl = 0.0f;
 static float target_rpm_fr = 0.0f;
@@ -133,6 +136,7 @@ void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
   Servo_InitAll();
+  ArmControl_Init(&arm_control);
   /* USER CODE END Init */
 
   /* USER CODE BEGIN RTOS_MUTEX */

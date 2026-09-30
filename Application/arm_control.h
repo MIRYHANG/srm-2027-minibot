@@ -25,4 +25,17 @@ void ArmControl_Init(ArmControl_t *control);
  */
 bool ArmControl_SetTarget(ArmControl_t *control, const ArmPose_t *pose);
 
+/**
+ * @brief 读取已保存的目标姿态
+ * @param out_pose 用于接收目标姿态
+ * @return 有目标返回 true，没有目标返回 false
+ */
+bool ArmControl_GetTarget(const ArmControl_t *control, ArmPose_t *out_pose);
+
+/**
+ * @brief 清除目标姿态
+ * @note 只清除缓存，不会停止正在输出的 PWM
+ */
+void ArmControl_Clear(ArmControl_t *control);
+
 #endif //XIAOSAI_ARM_CONTROL_H
