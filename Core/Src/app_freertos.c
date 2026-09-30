@@ -132,7 +132,7 @@ void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
-
+  Servo_InitAll();
   /* USER CODE END Init */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -175,7 +175,7 @@ void StartChassisControlTask(void const * argument)
   Motor_InitAndStart();
   Encoder_InitAndStart();
   SpeedPID_InitAll();
-  Servo_InitAll();
+
 
   PhoneRemote_InitAndStart();
 

@@ -53,6 +53,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         BSP/oled.h
         BSP/servo.c
         BSP/servo.h
+        Application/arm_pose.c
+        Application/arm_pose.h
 )
 
 # Add STM32CubeMX generated sources
