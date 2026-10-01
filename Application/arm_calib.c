@@ -4,6 +4,7 @@
 
 #include "arm_calib.h"
 
+#include <math.h>
 #include <stddef.h>
 
 static const ArmJointCalib_t ARM_CALIB[ARM_JOINT_COUNT] =
@@ -24,4 +25,28 @@ const ArmJointCalib_t *ArmCalib_Get(int idx)
     }
 
     return &ARM_CALIB[idx];
+}
+
+bool ArmCalib_Clamp(int idx, float in, float *out)
+{
+    const ArmJointCalib_t *calib = ArmCalib_Get(idx);
+    if (idx < 0 || out == NULL || isnan(in))
+    {
+        return false;
+    }
+
+    if (in < calib->min_val)
+    {
+        *out = calib->min_val;
+    }
+    else if (in > calib->max_val)
+    {
+        *out = calib->max_val;
+    }
+    else
+    {
+        *out = in;
+    }
+
+    return true;
 }
