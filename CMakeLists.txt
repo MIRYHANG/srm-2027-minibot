@@ -57,6 +57,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Application/arm_pose.h
         Application/arm_control.c
         Application/arm_control.h
+        Application/arm_calib.c
+        Application/arm_calib.h
 )
 
 # Add STM32CubeMX generated sources
