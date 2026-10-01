@@ -30,7 +30,7 @@ const ArmJointCalib_t *ArmCalib_Get(int idx)
 bool ArmCalib_Clamp(int idx, float in, float *out)
 {
     const ArmJointCalib_t *calib = ArmCalib_Get(idx);
-    if (idx < 0 || out == NULL || isnan(in))
+    if (calib == NULL || out == NULL || isnan(in))
     {
         return false;
     }
