@@ -6,6 +6,8 @@
 
 #include <stddef.h>
 
+#include "arm_calib.h"
+
 static bool InRange(float value, float min, float max)
 {
     return value >= min && value <= max;
@@ -18,15 +20,14 @@ bool ArmPose_IsValid(const ArmPose_t *pose)
         return false;
     }
 
-    // 关节角度范围暂按修订后的机械臂手册设置
-    if (!InRange(pose->j1_deg, 0.0f, 180.0f)) return false;
-    if (!InRange(pose->j2_deg, 30.0f, 90.0f)) return false;
-    if (!InRange(pose->j3_deg, 30.0f, 180.0f)) return false;
-    if (!InRange(pose->j4_deg, 90.0f, 180.0f)) return false;
-    if (!InRange(pose->j5_deg, 0.0f, 180.0f)) return false;
-
-    // 夹爪先用 0～1 表示目标比例，开合方向留待标定
-    if (!InRange(pose->gripper_ratio, 0.0f, 1.0f)) return false;
+    for (int idx = 0;idx < ARM_JOINT_COUNT;idx++)
+    {
+        const ArmJointCalib_t *calib = ArmCalib_Get(idx);
+        if (calib == NULL || !InRange(pose->joint[idx], calib->min_val, calib->max_val))
+        {
+            return false;
+        }
+    }
 
     return true;
 }
