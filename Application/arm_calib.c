@@ -53,29 +53,7 @@ bool ArmCalib_Clamp(int idx, float in, float *out)
 
 bool ArmCalib_ToPulse(int idx, float val, uint16_t *pulse_us)
 {
-    if (pulse_us == NULL)
-    {
-        return false;
-    }
-
-    const ArmJointCalib_t *calib = ArmCalib_Get(idx);
-    if (calib == NULL || calib->min_val >= calib->max_val)
-    {
-        return false;
-    }
-
-    float clamp;
-    if (!ArmCalib_Clamp(idx,val,&clamp))
-    {
-        return false;
-    }
-
-    float ratio = (clamp - calib->min_val) / (calib->max_val - calib->min_val);
-
-    float pulse = (float)calib->pulse_at_min_us + ratio * ((float)calib->pulse_at_max_us - (float)calib->pulse_at_min_us);
-
-    *pulse_us = (uint16_t)lroundf(pulse);
-    return true;
+    return ArmCalib_ToPulseWithCalib(ArmCalib_Get(idx), val, pulse_us);
 }
 
 bool ArmCalib_ToPulseWithCalib(const ArmJointCalib_t *calib,
