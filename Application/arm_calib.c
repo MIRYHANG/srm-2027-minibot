@@ -77,3 +77,37 @@ bool ArmCalib_ToPulse(int idx, float val, uint16_t *pulse_us)
     *pulse_us = (uint16_t)lroundf(pulse);
     return true;
 }
+
+bool ArmCalib_ToPulseWithCalib(const ArmJointCalib_t *calib,
+                              float val,
+                              uint16_t *pulse_us)
+{
+    if (calib == NULL || pulse_us == NULL || isnan(val))
+    {
+        return false;
+    }
+
+    if (!isfinite(calib->min_val) ||
+        !isfinite(calib->max_val) ||
+        calib->min_val >= calib->max_val)
+    {
+        return false;
+    }
+
+    float clamped = val;
+    if (clamped < calib->min_val)
+    {
+        clamped = calib->min_val;
+    }
+    else if (clamped > calib->max_val)
+    {
+        clamped = calib->max_val;
+    }
+
+    float ratio = (clamped - calib->min_val) / (calib->max_val - calib->min_val);
+
+    float pulse = (float)calib->pulse_at_min_us + ratio * ((float)calib->pulse_at_max_us - (float)calib->pulse_at_min_us);
+
+    *pulse_us = (uint16_t)lroundf(pulse);
+    return true;
+}
