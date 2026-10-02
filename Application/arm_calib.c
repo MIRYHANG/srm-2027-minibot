@@ -9,13 +9,27 @@
 
 static const ArmJointCalib_t ARM_CALIB[ARM_JOINT_COUNT] =
 {
-    [ARM_J1]      = {0.0f,180.0f, 1000U, 2000U, 60.0f },
-    [ARM_J2]      = {30.0f,90.0f, 1000U, 2000U, 60.0f },
-    [ARM_J3]      = {30.0f,180.0f, 1000U, 2000U, 60.0f },
-    [ARM_J4]      = {90.0f,180.0f, 1000U, 2000U, 60.0f },
-    [ARM_J5]      = {0.0f,180.0f, 1000U, 2000U, 60.0f },
-    [ARM_GRIPPER] = {0.0f,1.0f, 1000U, 2000U, 60.0f / 180.0f }
+    [ARM_J1]      = {0.0f, 180.0f, 500U, 2500U, 60.0f},  // TODO：实物标定零位和方向
+    [ARM_J2]      = {30.0f, 90.0f, 833U, 1500U, 60.0f},  // TODO：实物标定零位和方向
+    [ARM_J3]      = {30.0f, 180.0f, 833U, 2500U, 60.0f}, // TODO：实物标定零位和方向
+    [ARM_J4]      = {90.0f, 180.0f, 1500U, 2500U, 60.0f}, // TODO：实物标定零位和方向
+    [ARM_J5]      = {0.0f, 180.0f, 500U, 2500U, 60.0f},  // TODO：实物标定零位和方向
+    [ARM_GRIPPER] = {0.0f, 1.0f, 1000U, 2000U, 2.0f}    // TODO：实物标定零位和方向，并确定夹爪开合位置
 };
+
+// 调用者先检查标定项和输入，正负无穷分别裁剪到上下限
+static float ClampWithCalib(const ArmJointCalib_t *calib, float in)
+{
+    if (in < calib->min_val)
+    {
+        return calib->min_val;
+    }
+    if (in > calib->max_val)
+    {
+        return calib->max_val;
+    }
+    return in;
+}
 
 const ArmJointCalib_t *ArmCalib_Get(int idx)
 {
@@ -35,18 +49,7 @@ bool ArmCalib_Clamp(int idx, float in, float *out)
         return false;
     }
 
-    if (in < calib->min_val)
-    {
-        *out = calib->min_val;
-    }
-    else if (in > calib->max_val)
-    {
-        *out = calib->max_val;
-    }
-    else
-    {
-        *out = in;
-    }
+    *out = ClampWithCalib(calib, in);
 
     return true;
 }
@@ -72,15 +75,7 @@ bool ArmCalib_ToPulseWithCalib(const ArmJointCalib_t *calib,
         return false;
     }
 
-    float clamped = val;
-    if (clamped < calib->min_val)
-    {
-        clamped = calib->min_val;
-    }
-    else if (clamped > calib->max_val)
-    {
-        clamped = calib->max_val;
-    }
+    float clamped = ClampWithCalib(calib, val);
 
     float ratio = (clamped - calib->min_val) / (calib->max_val - calib->min_val);
 

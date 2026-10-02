@@ -329,42 +329,42 @@ static void SpeedPID_InitAll(void)
 /**
  * @brief 将六个舵机对象绑定到对应的定时器通道
  * @note 这里只保存通道和脉宽范围，不启动 PWM
- * @note 1000～2000 μs 是待标定范围，装上机构前需要逐个确认
+ * @note 500～2500 μs 为底层脉宽保护范围，关节限位由 ARM_CALIB 决定
  */
 static void Servo_InitAll(void)
 {
   // 舵机 1：PC6，对应 TIM8 通道 1
-  if (!Servo_Init(&servo_1, &htim8, TIM_CHANNEL_1, 1000U, 2000U))
+  if (!Servo_Init(&servo_1, &htim8, TIM_CHANNEL_1, 500U, 2500U))
   {
     Error_Handler();
   }
 
   // 舵机 2：PC7，对应 TIM8 通道 2
-  if (!Servo_Init(&servo_2, &htim8, TIM_CHANNEL_2, 1000U, 2000U))
+  if (!Servo_Init(&servo_2, &htim8, TIM_CHANNEL_2, 500U, 2500U))
   {
     Error_Handler();
   }
 
   // 舵机 3：PC8，对应 TIM8 通道 3
-  if (!Servo_Init(&servo_3, &htim8, TIM_CHANNEL_3, 1000U, 2000U))
+  if (!Servo_Init(&servo_3, &htim8, TIM_CHANNEL_3, 500U, 2500U))
   {
     Error_Handler();
   }
 
   // 舵机 4：PC9，对应 TIM8 通道 4
-  if (!Servo_Init(&servo_4, &htim8, TIM_CHANNEL_4, 1000U, 2000U))
+  if (!Servo_Init(&servo_4, &htim8, TIM_CHANNEL_4, 500U, 2500U))
   {
     Error_Handler();
   }
 
   // 舵机 5：PB14，对应 TIM15 通道 1
-  if (!Servo_Init(&servo_5, &htim15, TIM_CHANNEL_1, 1000U, 2000U))
+  if (!Servo_Init(&servo_5, &htim15, TIM_CHANNEL_1, 500U, 2500U))
   {
     Error_Handler();
   }
 
   // 舵机 6：PB15，对应 TIM15 通道 2
-  if (!Servo_Init(&servo_6, &htim15, TIM_CHANNEL_2, 1000U, 2000U))
+  if (!Servo_Init(&servo_6, &htim15, TIM_CHANNEL_2, 500U, 2500U))
   {
     Error_Handler();
   }
