@@ -39,6 +39,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         BSP/encoder.h
         BSP/motor.c
         BSP/motor.h
+        BSP/safety.c
+        BSP/safety.h
         Algorithm/mecanum.c
         Algorithm/mecanum.h
         Application/remote_input.h
