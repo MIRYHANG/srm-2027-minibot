@@ -18,6 +18,33 @@ static bool AxisValid(float value)
 }
 
 /**
+ * @brief 检查机械臂命令的关节速度比例和预设值是否有效
+ * @param arm 待检查的机械臂命令，调用方保证指针非空
+ * @return 全部有效返回 true，任一关节越界、为 NaN 或预设非法时返回 false
+ */
+static bool ArmCommandValid(const ArmRemoteCommand_t *arm)
+{
+    // 只接受定义过的三种预设值，防止非法枚举进入后续机械臂逻辑
+    if (arm->preset != ARM_PRESET_NONE &&
+        arm->preset != ARM_PRESET_GRAB_READY &&
+        arm->preset != ARM_PRESET_STOW)
+    {
+        return false;
+    }
+
+    // 每个关节的 jog 都必须在 -1～1 内，AxisValid 也会拒绝 NaN
+    for (int idx = 0; idx < ARM_JOINT_COUNT; ++idx)
+    {
+        if (!AxisValid(arm->jog[idx]))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
  * @brief 初始化遥控输入管理对象，清空两路状态并默认不选择遥控来源
  * @param input 遥控输入管理对象指针；为 NULL 时不执行操作
  */
@@ -80,21 +107,23 @@ void RemoteInput_Select(RemoteInput_t *input, RemoteSource_t source)
  * @brief 保存指定来源最近一次通过校验的遥控命令及其接收时间
  * @param input 遥控输入管理对象指针
  * @param source 命令来源，只接受手机或自制手柄
- * @param command 待保存的命令，三个摇杆轴均须在 -1.0f 到 1.0f 范围内
+ * @param command 待保存的命令，底盘轴和各关节 jog 均须在 -1.0f 到 1.0f 范围内
  * @param now_ms 收到有效命令时的时间，单位为毫秒
- * @return 参数和轴值有效时返回 true；否则返回 false，原状态不变
+ * @return 参数、各轴和预设均有效时返回 true；否则返回 false，原状态不变
  * @note 应在完整数据帧校验通过后调用，不能按单个串口字节更新有效时间
  */
 bool RemoteInput_Update(RemoteInput_t *input, RemoteSource_t source,
                         const RemoteCommand_t *command, uint32_t now_ms)
 {
-    // 空指针或任一摇杆轴超出 [-1, 1] 时拒绝更新，原状态保持不变
+    // 先完成所有校验，再修改状态，非法命令不能覆盖上一帧有效命令
     if (input == NULL || command == NULL ||
         !AxisValid(command->forward) ||
         !AxisValid(command->left) ||
-        !AxisValid(command->turn)) {
+        !AxisValid(command->turn) ||
+        !ArmCommandValid(&command->arm))
+    {
         return false;
-        }
+    }
 
     // 根据来源，让 state 指向 input 内对应的原状态，而不是复制一份状态
     RemoteState_t *state;
@@ -117,6 +146,7 @@ bool RemoteInput_Update(RemoteInput_t *input, RemoteSource_t source,
     state->last_valid_ms = now_ms;
     state->has_valid_frame = true;
 
+    // 只有收到一帧关闭使能的有效命令才完成重新上锁
     if (!command->enabled)
     {
         state->armed = true;
@@ -135,7 +165,7 @@ bool RemoteInput_Update(RemoteInput_t *input, RemoteSource_t source,
 RemoteCommand_t RemoteInput_GetSafe(const RemoteInput_t *input,
                                     uint32_t now_ms, uint32_t timeout_ms)
 {
-    // 先准备全零命令；任何不安全情况都返回它
+    // 先准备全零命令，不安全时底盘停机且机械臂保持当前位置
     RemoteCommand_t zero = {0};
 
     // 无管理对象或超时阈值为零时，不允许输出运动命令
@@ -159,12 +189,12 @@ RemoteCommand_t RemoteInput_GetSafe(const RemoteInput_t *input,
         return zero;
     }
 
-    // 没有有效帧、帧已超时、未使能或请求停机时都不能使用旧命令
+    // 没有有效帧、帧已超时、未使能、请求停机或尚未重新上锁时都不能使用旧命令
     if (!state->has_valid_frame ||
         (uint32_t)(now_ms - state->last_valid_ms) > timeout_ms ||
         !state->command.enabled ||
-        state->command.stop_requested
-        || !state->armed)
+        state->command.stop_requested ||
+        !state->armed)
     {
         return zero;
     }

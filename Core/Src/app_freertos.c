@@ -105,6 +105,9 @@ static RemoteCommand_t remote_command;  // 当前安全遥控命令
 #define CHASSIS_MAX_WZ_RADPS 0.0f  // 最大旋转角速度，rad/s
 /* USER CODE END Variables */
 osThreadId ChassisControlTHandle;
+osThreadId ArmTaskHandle;
+osThreadId ProtocolTaskHandle;
+osThreadId SensorTaskHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -127,6 +130,9 @@ static void Chassis_Stop(void);
 /* USER CODE END FunctionPrototypes */
 
 void StartChassisControlTask(void const * argument);
+void StartArmTask(void const * argument);
+void StartProtocolTask(void const * argument);
+void StartSensorTask(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -200,8 +206,20 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the thread(s) */
   /* definition and creation of ChassisControlT */
-  osThreadDef(ChassisControlT, StartChassisControlTask, osPriorityNormal, 0, 256);
+  osThreadDef(ChassisControlT, StartChassisControlTask, osPriorityHigh, 0, 256);
   ChassisControlTHandle = osThreadCreate(osThread(ChassisControlT), NULL);
+
+  /* definition and creation of ArmTask */
+  osThreadDef(ArmTask, StartArmTask, osPriorityNormal, 0, 256);
+  ArmTaskHandle = osThreadCreate(osThread(ArmTask), NULL);
+
+  /* definition and creation of ProtocolTask */
+  osThreadDef(ProtocolTask, StartProtocolTask, osPriorityNormal, 0, 256);
+  ProtocolTaskHandle = osThreadCreate(osThread(ProtocolTask), NULL);
+
+  /* definition and creation of SensorTask */
+  osThreadDef(SensorTask, StartSensorTask, osPriorityLow, 0, 384);
+  SensorTaskHandle = osThreadCreate(osThread(SensorTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -258,6 +276,60 @@ void StartChassisControlTask(void const * argument)
     }
   }
   /* USER CODE END StartChassisControlTask */
+}
+
+/* USER CODE BEGIN Header_StartArmTask */
+/**
+* @brief Function implementing the ArmTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartArmTask */
+void StartArmTask(void const * argument)
+{
+  /* USER CODE BEGIN StartArmTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartArmTask */
+}
+
+/* USER CODE BEGIN Header_StartProtocolTask */
+/**
+* @brief Function implementing the ProtocolTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartProtocolTask */
+void StartProtocolTask(void const * argument)
+{
+  /* USER CODE BEGIN StartProtocolTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartProtocolTask */
+}
+
+/* USER CODE BEGIN Header_StartSensorTask */
+/**
+* @brief Function implementing the SensorTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartSensorTask */
+void StartSensorTask(void const * argument)
+{
+  /* USER CODE BEGIN StartSensorTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartSensorTask */
 }
 
 /* Private application code --------------------------------------------------*/
