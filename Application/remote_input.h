@@ -29,6 +29,7 @@ typedef struct
     RemoteCommand_t command;
     uint32_t last_valid_ms; // 最近一次收到有效遥控帧的时间
     bool has_valid_frame;
+    bool armed;             // 已收到 enabled=false 的有效帧；状态清零后为 false，超时不清除
 } RemoteState_t;
 
 typedef struct

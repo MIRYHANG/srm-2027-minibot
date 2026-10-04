@@ -4,6 +4,7 @@
 
 #include "remote_input.h"
 #include <stddef.h>
+#include <sys/stat.h>
 
 /**
  * @brief 检查单个摇杆轴的归一化数值是否有效
@@ -115,7 +116,11 @@ bool RemoteInput_Update(RemoteInput_t *input, RemoteSource_t source,
     state->command = *command;
     state->last_valid_ms = now_ms;
     state->has_valid_frame = true;
-    // true 只表示命令保存成功，不代表底盘已经开始运动
+
+    if (!command->enabled)
+    {
+        state->armed = true;
+    }
     return true;
 }
 
@@ -158,7 +163,8 @@ RemoteCommand_t RemoteInput_GetSafe(const RemoteInput_t *input,
     if (!state->has_valid_frame ||
         (uint32_t)(now_ms - state->last_valid_ms) > timeout_ms ||
         !state->command.enabled ||
-        state->command.stop_requested)
+        state->command.stop_requested
+        || !state->armed)
     {
         return zero;
     }
