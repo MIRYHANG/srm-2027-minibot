@@ -4,7 +4,6 @@
 
 #include "remote_input.h"
 #include <stddef.h>
-#include <sys/stat.h>
 
 /**
  * @brief 检查单个摇杆轴的归一化数值是否有效

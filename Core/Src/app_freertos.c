@@ -36,6 +36,8 @@
 #include "arm_control.h"
 #include "iwdg.h"
 #include "safety.h"
+#include "queue.h"
+#include "task_monitor.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,8 +50,15 @@
 // 暂定超时阈值，后续根据实际发送周期确认
 #define PHONE_TIMEOUT_MS 200U
 
-// 限制每周期处理量，避免接收处理一直占用底盘任务
+// 限制每周期处理字节数，避免协议任务长时间占用 CPU
 #define PHONE_RX_BUDGET 64U
+#define REMOTE_PUBLISH_STALE_MS 30U
+
+typedef struct
+{
+  RemoteCommand_t command;
+  uint32_t stamp_ms; // 协议任务发布这份安全命令的时间
+} RemotePublished_t;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -94,10 +103,15 @@ static MecanumGeometry_t chassis_geometry = {
   .track_width_m = 0.0f,   // TODO：左右轮中心距
 };
 
-static srm_parser_t phone_parser;       // 保存手机协议解析进度
-static RemoteInput_t remote_input;      // 保存两种遥控来源的状态
-static RemoteCommand_t remote_command;  // 当前安全遥控命令
+// 以下四个状态只由 ProtocolTask 访问
+// 其他任务通过 remote_cmd_queue 获取命令副本
+static srm_parser_t phone_parser;
+static RemoteInput_t remote_input;
+static RemoteCommand_t remote_command;
 static RemotePhoneArm_t phone_arm;
+
+// 长度为 1，只保存协议任务最近发布的一份完整命令
+static QueueHandle_t remote_cmd_queue = NULL;
 
 // TODO：后续根据底盘能力和调试结果设置
 // 当前保持为零，暂不产生运动目标
@@ -127,6 +141,7 @@ static void PhoneRemote_InitAndStart(void);
 static void PhoneRemote_Update(void);
 static void Chassis_UpdateFromRemote(const RemoteCommand_t *command);
 static void Chassis_Stop(void);
+static bool Remote_GetLatest(RemoteCommand_t *out);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -187,6 +202,7 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
   Servo_InitAll();
   ArmControl_Init(&arm_control);
+  TaskMonitor_Init(HAL_GetTick());
   /* USER CODE END Init */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -203,6 +219,11 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
+  remote_cmd_queue = xQueueCreate(1, sizeof(RemotePublished_t));
+  if (remote_cmd_queue == NULL)
+  {
+    Error_Handler();
+  }
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -215,7 +236,7 @@ void MX_FREERTOS_Init(void) {
   ArmTaskHandle = osThreadCreate(osThread(ArmTask), NULL);
 
   /* definition and creation of ProtocolTask */
-  osThreadDef(ProtocolTask, StartProtocolTask, osPriorityNormal, 0, 256);
+  osThreadDef(ProtocolTask, StartProtocolTask, osPriorityAboveNormal, 0, 256);
   ProtocolTaskHandle = osThreadCreate(osThread(ProtocolTask), NULL);
 
   /* definition and creation of SensorTask */
@@ -238,29 +259,34 @@ void MX_FREERTOS_Init(void) {
 void StartChassisControlTask(void const * argument)
 {
   /* USER CODE BEGIN StartChassisControlTask */
+  (void)argument;
+
   Motor_InitAndStart();
   Encoder_InitAndStart();
   SpeedPID_InitAll();
 
-
-  PhoneRemote_InitAndStart();
-
-
   uint32_t last_wake = osKernelSysTick();
   uint32_t last_sample = last_wake;
-  /* Infinite loop */
-  for(;;)
+
+  for (;;)
   {
-    osDelayUntil(&last_wake, 10);
-    HAL_IWDG_Refresh(&hiwdg);
+    osDelayUntil(&last_wake, 10U);
+
+    // 底盘任务能执行到这里，并且其他任务均正常时才喂狗
+    if (TaskMonitor_AllAlive(HAL_GetTick()))
+    {
+      HAL_IWDG_Refresh(&hiwdg);
+    }
 
     uint32_t now = osKernelSysTick();
-    float dt_s = (float)(now - last_sample) / (float)configTICK_RATE_HZ;
+    float dt_s = (float)(now - last_sample) /
+                 (float)configTICK_RATE_HZ;
     last_sample = now;
 
-    PhoneRemote_Update();
+    RemoteCommand_t command;
+    (void)Remote_GetLatest(&command);
 
-    if (!remote_command.enabled || remote_command.stop_requested)
+    if (!command.enabled || command.stop_requested)
     {
       Chassis_Stop();
 
@@ -272,7 +298,7 @@ void StartChassisControlTask(void const * argument)
     }
     else
     {
-      Chassis_UpdateFromRemote(&remote_command);
+      Chassis_UpdateFromRemote(&command);
       ChassisSpeed_Update(dt_s);
     }
   }
@@ -290,9 +316,25 @@ void StartArmTask(void const * argument)
 {
   /* USER CODE BEGIN StartArmTask */
   /* Infinite loop */
-  for(;;)
+  (void)argument;
+
+  // 初始化阶段的阻塞时间不能超过本任务 100 ms 的心跳期限
+  // 需要等待时使用 osDelay，不使用 HAL_Delay
+  // osDelay 不会自动打心跳，等待期间仍须遵守心跳期限
+  uint32_t last_wake = osKernelSysTick();
+
+  for (;;)
   {
-    osDelay(1);
+    RemoteCommand_t command;
+    (void)Remote_GetLatest(&command);
+
+    // TODO：任务 4 接入 ArmControl
+    // 当前只读取命令，不启动舵机，也不输出脉宽
+    (void)command;
+
+    TaskMonitor_Beat(TASK_ID_ARM, HAL_GetTick());
+
+    osDelayUntil(&last_wake, 20U);
   }
   /* USER CODE END StartArmTask */
 }
@@ -308,9 +350,33 @@ void StartProtocolTask(void const * argument)
 {
   /* USER CODE BEGIN StartProtocolTask */
   /* Infinite loop */
-  for(;;)
+  (void)argument;
+
+  // 初始化必须在协议任务的启动宽限内完成
+  PhoneRemote_InitAndStart();
+
+  uint32_t last_wake = osKernelSysTick();
+
+  for (;;)
   {
-    osDelay(1);
+    // 串口异常时，此函数仍会把 remote_command 保持为全零
+    PhoneRemote_Update();
+
+    RemotePublished_t published = {
+      .command = remote_command,
+      .stamp_ms = HAL_GetTick()
+  };
+
+    // 长度为 1 的队列始终覆盖为最新命令，不积累历史命令
+    if (xQueueOverwrite(remote_cmd_queue, &published) != pdPASS)
+    {
+      Error_Handler();
+    }
+
+    // 发布完成后打心跳，串口故障本身不等于协议任务卡死
+    TaskMonitor_Beat(TASK_ID_PROTOCOL, HAL_GetTick());
+
+    osDelayUntil(&last_wake, 5U);
   }
   /* USER CODE END StartProtocolTask */
 }
@@ -326,9 +392,20 @@ void StartSensorTask(void const * argument)
 {
   /* USER CODE BEGIN StartSensorTask */
   /* Infinite loop */
-  for(;;)
+  (void)argument;
+
+  // 初始化阶段的阻塞时间不能超过本任务 400 ms 的心跳期限
+  // 需要等待时使用 osDelay，不使用 HAL_Delay
+  // osDelay 不会自动打心跳，等待期间仍须遵守心跳期限
+  uint32_t last_wake = osKernelSysTick();
+
+  for (;;)
   {
-    osDelay(1);
+    // TODO：INA226 / OLED
+
+    TaskMonitor_Beat(TASK_ID_SENSOR, HAL_GetTick());
+
+    osDelayUntil(&last_wake, 100U);
   }
   /* USER CODE END StartSensorTask */
 }
@@ -638,6 +715,38 @@ static void Chassis_UpdateFromRemote(const RemoteCommand_t *command)
 
   // 将底盘速度换算为四个轮子的目标 RPM
   Chassis_UpdateTargetRpm(vx_mps, vy_mps, wz_radps);
+}
+
+/**
+ * @brief 读取最近发布的安全命令，不从队列中取走数据
+ * @return 成功且未过期返回 true，否则输出全零并返回 false
+ * @note 底盘和机械臂均可调用，两者不会互相消费队列中的命令
+ */
+static bool Remote_GetLatest(RemoteCommand_t *out)
+{
+  if (out == NULL)
+  {
+    return false;
+  }
+
+  *out = (RemoteCommand_t){0};
+
+  RemotePublished_t published;
+
+  if (remote_cmd_queue == NULL ||
+      xQueuePeek(remote_cmd_queue, &published, 0U) != pdPASS)
+  {
+    return false;
+  }
+
+  if ((uint32_t)(HAL_GetTick() - published.stamp_ms) >
+      REMOTE_PUBLISH_STALE_MS)
+  {
+    return false;
+  }
+
+  *out = published.command;
+  return true;
 }
 /* USER CODE END Application */
 
