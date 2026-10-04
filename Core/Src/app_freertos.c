@@ -97,6 +97,7 @@ static MecanumGeometry_t chassis_geometry = {
 static srm_parser_t phone_parser;       // 保存手机协议解析进度
 static RemoteInput_t remote_input;      // 保存两种遥控来源的状态
 static RemoteCommand_t remote_command;  // 当前安全遥控命令
+static RemotePhoneArm_t phone_arm;
 
 // TODO：后续根据底盘能力和调试结果设置
 // 当前保持为零，暂不产生运动目标
@@ -547,6 +548,7 @@ static void Chassis_UpdateTargetRpm(float vx_mps, float vy_mps,
 static void PhoneRemote_InitAndStart(void)
 {
   RemoteInput_Init(&remote_input);
+  RemotePhoneArm_Init(&phone_arm); // selected = ARM_J1，也就是 0
   RemoteInput_Select(&remote_input, REMOTE_SOURCE_PHONE);
   srm_parser_init(&phone_parser);
 
@@ -575,6 +577,7 @@ static void PhoneRemote_Update(void)
   if (RemoteUart_HasFault())
   {
     remote_input.phone = (RemoteState_t){0};
+    phone_arm.last_dpad = 0U;
     srm_parser_init(&phone_parser);
 
     if (!RemoteUart_Recover())
@@ -596,13 +599,15 @@ static void PhoneRemote_Update(void)
     }
 
     // 使用字节实际到达的时间，而不是当前处理时间
-    RemotePhone_ProcessByte(&phone_parser, &remote_input, item.byte, item.received_ms);
+    RemotePhone_ProcessByte(&phone_parser, &remote_input, &phone_arm,
+                            item.byte, item.received_ms);
   }
 
   // 处理过程中也可能出现中断异常，不能使用刚解析的命令
   if (RemoteUart_HasFault())
   {
     remote_input.phone = (RemoteState_t){0};
+    phone_arm.last_dpad = 0U;
     srm_parser_init(&phone_parser);
     return;
   }
