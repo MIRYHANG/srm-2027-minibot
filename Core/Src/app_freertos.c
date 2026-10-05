@@ -41,6 +41,8 @@
 #include "i2c.h"
 #include "i2c_bus_hal.h"
 #include "ina226.h"
+#include "ssd1306.h"
+#include "power_display.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -61,6 +63,12 @@
 #define POWER_SHUNT_OHM     0.002f // 分流电阻 2 mΩ，量程约 ±40.96 A
 #define POWER_INA226_ADDR   0x40U  // TODO：按 A0/A1 接法确认；找不到时自动扫描 0x40～0x4F
 #define POWER_RETRY_PERIODS 10U    // 初始化失败后每 10 个周期（约 1 s）重试一次
+
+// OLED 功率显示
+#define OLED_ADDR            SSD1306_ADDR_LOW // TODO：按模块 SA0 接法确认，少数模块是 0x3D
+#define OLED_POWER_UP_MS     100U // 上电后等电源稳定再初始化
+#define OLED_REFRESH_PERIODS 5U   // 每 5 个周期（约 500 ms）刷新一次
+#define OLED_RETRY_PERIODS   10U  // 初始化失败后每 10 个周期（约 1 s）重试一次
 
 typedef struct
 {
@@ -136,6 +144,13 @@ static bool power_reading_valid = false;   // 本周期读数是否有效
 static uint8_t power_sensor_addr = POWER_INA226_ADDR;
 static uint32_t power_retry_countdown = 0U;
 
+// 以下状态只由 SensorTask 访问；oled 含 1 KB 显存，必须是静态变量
+static Ssd1306_t oled;
+static PowerDisplayLine_t oled_lines[POWER_DISPLAY_LINES];
+static uint32_t oled_refresh_countdown = 0U;
+static uint32_t oled_retry_countdown = 0U;
+static ResetCause_t reset_cause = RESET_CAUSE_UNKNOWN;
+
 // TODO：后续根据底盘能力和调试结果设置
 // 当前保持为零，暂不产生运动目标
 #define CHASSIS_MAX_VX_MPS   0.0f  // 最大前后速度，m/s
@@ -169,6 +184,8 @@ static void ArmServos_Start(const uint16_t pulse_us[]);
 static void ArmServos_Apply(const uint16_t pulse_us[]);
 static bool PowerSensor_Start(void);
 static void PowerSensor_Update(void);
+static ResetCause_t ResetCause_FromFlags(uint32_t flags);
+static void Oled_Update(void);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -450,6 +467,12 @@ void StartSensorTask(void const * argument)
     Error_Handler();
   }
 
+  reset_cause = ResetCause_FromFlags(g_reset_flags);
+
+  // 等 OLED 电源稳定；加上首次全屏刷新（400 kHz 下约 30 ms，100 kHz 下约 110 ms），
+  // 第一次打心跳前最多约 220 ms，小于 400 ms 期限
+  osDelay(OLED_POWER_UP_MS);
+
   uint32_t last_wake = osKernelSysTick();
 
   for (;;)
@@ -457,7 +480,7 @@ void StartSensorTask(void const * argument)
     // 传感器故障不影响行驶，只是读数无效
     PowerSensor_Update();
 
-    // TODO：OLED 显示
+    Oled_Update();
 
     TaskMonitor_Beat(TASK_ID_SENSOR, HAL_GetTick());
 
@@ -880,6 +903,81 @@ static void PowerSensor_Update(void)
   {
     power_reading = reading;
   }
+}
+
+/**
+ * @brief 把上电时的复位标志换算成复位原因
+ * @note 上电时 BOR 和 PIN 标志会同时置位，所以先判断 BOR
+ */
+static ResetCause_t ResetCause_FromFlags(uint32_t flags)
+{
+  if ((flags & RCC_CSR_IWDGRSTF) != 0U)
+  {
+    return RESET_CAUSE_IWDG;
+  }
+  if ((flags & RCC_CSR_WWDGRSTF) != 0U)
+  {
+    return RESET_CAUSE_WWDG;
+  }
+  if ((flags & RCC_CSR_LPWRRSTF) != 0U)
+  {
+    return RESET_CAUSE_LOW_POWER;
+  }
+  if ((flags & RCC_CSR_SFTRSTF) != 0U)
+  {
+    return RESET_CAUSE_SOFTWARE;
+  }
+  if ((flags & RCC_CSR_BORRSTF) != 0U)
+  {
+    return RESET_CAUSE_POWER;
+  }
+  if ((flags & RCC_CSR_PINRSTF) != 0U)
+  {
+    return RESET_CAUSE_PIN;
+  }
+  return RESET_CAUSE_UNKNOWN;
+}
+
+/**
+ * @brief 每 500 ms 刷新一次 OLED；屏幕未就绪时按间隔重试初始化
+ * @note 只发送内容有变化的页，平时每次刷新只有电压、电流、功率三行
+ */
+static void Oled_Update(void)
+{
+  if (!oled.ready)
+  {
+    if (oled_retry_countdown > 0U)
+    {
+      oled_retry_countdown--;
+      return;
+    }
+
+    if (!Ssd1306_Init(&oled, &i2c2_bus, OLED_ADDR))
+    {
+      oled_retry_countdown = OLED_RETRY_PERIODS;
+      return;
+    }
+
+    // 初始化成功后立刻显示
+    oled_refresh_countdown = 0U;
+  }
+
+  if (oled_refresh_countdown > 0U)
+  {
+    oled_refresh_countdown--;
+    return;
+  }
+  oled_refresh_countdown = OLED_REFRESH_PERIODS - 1U;
+
+  PowerDisplay_Format(&power_reading, power_reading_valid, reset_cause, oled_lines);
+
+  for (uint8_t page = 0U; page < POWER_DISPLAY_LINES; page++)
+  {
+    (void)Ssd1306_WriteLine(&oled, page, oled_lines[page]);
+  }
+
+  // 发送失败时驱动把 ready 清零，下个周期重新初始化
+  (void)Ssd1306_Flush(&oled);
 }
 /* USER CODE END Application */
 

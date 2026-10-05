@@ -74,6 +74,10 @@ add_executable(${CMAKE_PROJECT_NAME}
         BSP/ina226.h
         BSP/font5x7.c
         BSP/font5x7.h
+        BSP/ssd1306.c
+        BSP/ssd1306.h
+        Application/power_display.c
+        Application/power_display.h
 )
 
 # Add STM32CubeMX generated sources
