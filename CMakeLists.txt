@@ -65,6 +65,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Application/arm_motion.h
         Application/task_monitor.c
         Application/task_monitor.h
+        Application/arm_cycle.c
+        Application/arm_cycle.h
 )
 
 # Add STM32CubeMX generated sources

@@ -41,7 +41,8 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-
+// 上电时的 RCC->CSR 复位标志，在 main.c 中定义
+extern volatile uint32_t g_reset_flags;
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/

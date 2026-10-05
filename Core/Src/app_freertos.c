@@ -33,7 +33,7 @@
 #include "remote_uart.h"
 #include "remote_phone.h"
 #include "servo.h"
-#include "arm_control.h"
+#include "arm_cycle.h"
 #include "iwdg.h"
 #include "safety.h"
 #include "queue.h"
@@ -90,7 +90,14 @@ static Servo_t servo_4;
 static Servo_t servo_5;
 static Servo_t servo_6;
 
-static ArmControl_t arm_control;
+// 舵机通道按关节顺序排列：J1～J5、夹爪
+// TODO：和机械组确认 servo_1～6 与关节的对应关系
+static Servo_t *const arm_servos[ARM_JOINT_COUNT] = {
+  &servo_1, &servo_2, &servo_3, &servo_4, &servo_5, &servo_6
+};
+
+// 只由 ArmTask 访问
+static ArmCycle_t arm_cycle;
 
 static float target_rpm_fl = 0.0f;
 static float target_rpm_fr = 0.0f;
@@ -142,6 +149,8 @@ static void PhoneRemote_Update(void);
 static void Chassis_UpdateFromRemote(const RemoteCommand_t *command);
 static void Chassis_Stop(void);
 static bool Remote_GetLatest(RemoteCommand_t *out);
+static void ArmServos_Start(const uint16_t pulse_us[]);
+static void ArmServos_Apply(const uint16_t pulse_us[]);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -201,7 +210,6 @@ __weak void vApplicationMallocFailedHook(void)
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
   Servo_InitAll();
-  ArmControl_Init(&arm_control);
   TaskMonitor_Init(HAL_GetTick());
   /* USER CODE END Init */
 
@@ -323,20 +331,38 @@ void StartArmTask(void const * argument)
   // 初始化阶段的阻塞时间不能超过本任务 100 ms 的心跳期限
   // 需要等待时使用 osDelay，不使用 HAL_Delay
   // osDelay 不会自动打心跳，等待期间仍须遵守心跳期限
+
+  // 先按 STOW 算好 6 路脉宽再启动 PWM，舵机收到的第一个脉宽就是 STOW
+  if (!ArmCycle_Init(&arm_cycle))
+  {
+    Error_Handler();
+  }
+  ArmServos_Start(arm_cycle.pulse_us);
+
   uint32_t last_wake = osKernelSysTick();
+  uint32_t last_sample = last_wake;
 
   for (;;)
   {
+    osDelayUntil(&last_wake, 20U);
+
+    uint32_t now = osKernelSysTick();
+    float dt_s = (float)(now - last_sample) /
+                 (float)configTICK_RATE_HZ;
+    last_sample = now;
+
+    // 命令过期时得到全零命令，enabled 为 false，机械臂当场停住
     RemoteCommand_t command;
     (void)Remote_GetLatest(&command);
 
-    // TODO：任务 4 接入 ArmControl
-    // 当前只读取命令，不启动舵机，也不输出脉宽
-    (void)command;
+    // 失败时保持上一次的脉宽：不停 PWM，也不输出 0，舵机继续出力
+    if (ArmCycle_Step(&arm_cycle, &command, dt_s))
+    {
+      ArmServos_Apply(arm_cycle.pulse_us);
+    }
 
+    // 计算失败不等于任务卡死，照常打心跳
     TaskMonitor_Beat(TASK_ID_ARM, HAL_GetTick());
-
-    osDelayUntil(&last_wake, 20U);
   }
   /* USER CODE END StartArmTask */
 }
@@ -745,6 +771,36 @@ static bool Remote_GetLatest(RemoteCommand_t *out)
 
   *out = published.command;
   return true;
+}
+
+/**
+ * @brief 设置 6 路初始脉宽并启动舵机 PWM
+ * @param pulse_us 按关节顺序排列的脉宽
+ * @note 启动失败说明定时器配置有误，进入 Error_Handler
+ */
+static void ArmServos_Start(const uint16_t pulse_us[])
+{
+  for (int idx = 0; idx < ARM_JOINT_COUNT; idx++)
+  {
+    if (Servo_Start(arm_servos[idx], pulse_us[idx]) != HAL_OK)
+    {
+      Error_Handler();
+    }
+  }
+}
+
+/**
+ * @brief 把 6 路脉宽写入舵机
+ * @param pulse_us 按关节顺序排列的脉宽
+ * @note 脉宽来自 ARM_CALIB，都在 Servo_InitAll 的 500～2500 μs 内；
+ *       某一路被拒绝时该路保持上一次的脉宽
+ */
+static void ArmServos_Apply(const uint16_t pulse_us[])
+{
+  for (int idx = 0; idx < ARM_JOINT_COUNT; idx++)
+  {
+    (void)Servo_SetPulseUs(arm_servos[idx], pulse_us[idx]);
+  }
 }
 /* USER CODE END Application */
 

@@ -49,7 +49,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+// 上电时的 RCC->CSR，保存复位原因（看门狗、上电、按键等），供调试和 OLED 显示
+volatile uint32_t g_reset_flags = 0U;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -72,7 +73,9 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  // 复位标志要在其他代码之前读取，读完清除，否则下次复位时会和旧标志叠在一起
+  g_reset_flags = RCC->CSR;
+  __HAL_RCC_CLEAR_RESET_FLAGS();
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
