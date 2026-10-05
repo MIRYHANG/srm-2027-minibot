@@ -72,6 +72,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         BSP/i2c_bus_hal.h
         BSP/ina226.c
         BSP/ina226.h
+        BSP/font5x7.c
+        BSP/font5x7.h
 )
 
 # Add STM32CubeMX generated sources
