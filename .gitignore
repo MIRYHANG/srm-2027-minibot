@@ -33,5 +33,6 @@ CMakeUserPresets.json
 Thumbs.db
 desktop.ini
 
+*.exe
 # 大体积原始调试数据
 /logs/raw/
