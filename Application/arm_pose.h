@@ -5,6 +5,10 @@
 #ifndef XIAOSAI_ARM_POSE_H
 #define XIAOSAI_ARM_POSE_H
 
+// 夹爪开合比例：0.0 完全张开，1.0 完全夹紧
+#define ARM_GRIPPER_OPEN   0.0f
+#define ARM_GRIPPER_CLOSED 1.0f
+
 #include <stdbool.h>
 
 typedef enum
@@ -21,7 +25,7 @@ typedef enum
 
 typedef struct
 {
-    // J1～J5 的单位为度，夹爪为 0～1 的比例
+    // J1～J5 的单位为度，夹爪为 0～1 的比例，见 ARM_GRIPPER_OPEN / ARM_GRIPPER_CLOSED
     float joint[ARM_JOINT_COUNT];
 } ArmPose_t;
 
