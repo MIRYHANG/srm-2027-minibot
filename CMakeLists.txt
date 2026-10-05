@@ -67,6 +67,11 @@ add_executable(${CMAKE_PROJECT_NAME}
         Application/task_monitor.h
         Application/arm_cycle.c
         Application/arm_cycle.h
+        BSP/i2c_bus.h
+        BSP/i2c_bus_hal.c
+        BSP/i2c_bus_hal.h
+        BSP/ina226.c
+        BSP/ina226.h
 )
 
 # Add STM32CubeMX generated sources

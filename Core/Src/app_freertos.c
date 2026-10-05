@@ -38,6 +38,9 @@
 #include "safety.h"
 #include "queue.h"
 #include "task_monitor.h"
+#include "i2c.h"
+#include "i2c_bus_hal.h"
+#include "ina226.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -53,6 +56,11 @@
 // 限制每周期处理字节数，避免协议任务长时间占用 CPU
 #define PHONE_RX_BUDGET 64U
 #define REMOTE_PUBLISH_STALE_MS 30U
+
+// INA226 功率采样
+#define POWER_SHUNT_OHM     0.002f // 分流电阻 2 mΩ，量程约 ±40.96 A
+#define POWER_INA226_ADDR   0x40U  // TODO：按 A0/A1 接法确认；找不到时自动扫描 0x40～0x4F
+#define POWER_RETRY_PERIODS 10U    // 初始化失败后每 10 个周期（约 1 s）重试一次
 
 typedef struct
 {
@@ -120,6 +128,14 @@ static RemotePhoneArm_t phone_arm;
 // 长度为 1，只保存协议任务最近发布的一份完整命令
 static QueueHandle_t remote_cmd_queue = NULL;
 
+// 以下状态只由 SensorTask 访问；power_reading 可在调试器里直接查看
+static I2cBus_t i2c2_bus;
+static Ina226_t power_sensor;
+static Ina226Reading_t power_reading;      // 最近一次有效读数
+static bool power_reading_valid = false;   // 本周期读数是否有效
+static uint8_t power_sensor_addr = POWER_INA226_ADDR;
+static uint32_t power_retry_countdown = 0U;
+
 // TODO：后续根据底盘能力和调试结果设置
 // 当前保持为零，暂不产生运动目标
 #define CHASSIS_MAX_VX_MPS   0.0f  // 最大前后速度，m/s
@@ -151,6 +167,8 @@ static void Chassis_Stop(void);
 static bool Remote_GetLatest(RemoteCommand_t *out);
 static void ArmServos_Start(const uint16_t pulse_us[]);
 static void ArmServos_Apply(const uint16_t pulse_us[]);
+static bool PowerSensor_Start(void);
+static void PowerSensor_Update(void);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -425,11 +443,21 @@ void StartSensorTask(void const * argument)
   // 初始化阶段的阻塞时间不能超过本任务 400 ms 的心跳期限
   // 需要等待时使用 osDelay，不使用 HAL_Delay
   // osDelay 不会自动打心跳，等待期间仍须遵守心跳期限
+
+  // I2C2 由 OLED 和 INA226 共用，两者都只在本任务中访问，不需要互斥锁
+  if (!I2cBusHal_Init(&i2c2_bus, &hi2c2))
+  {
+    Error_Handler();
+  }
+
   uint32_t last_wake = osKernelSysTick();
 
   for (;;)
   {
-    // TODO：INA226 / OLED
+    // 传感器故障不影响行驶，只是读数无效
+    PowerSensor_Update();
+
+    // TODO：OLED 显示
 
     TaskMonitor_Beat(TASK_ID_SENSOR, HAL_GetTick());
 
@@ -800,6 +828,57 @@ static void ArmServos_Apply(const uint16_t pulse_us[])
   for (int idx = 0; idx < ARM_JOINT_COUNT; idx++)
   {
     (void)Servo_SetPulseUs(arm_servos[idx], pulse_us[idx]);
+  }
+}
+
+/**
+ * @brief 查找 INA226 地址并初始化
+ * @return 成功返回 true
+ * @note 总线卡死时最多 16 次 I2C 超时，约 160 ms，小于本任务 400 ms 的心跳期限
+ */
+static bool PowerSensor_Start(void)
+{
+  uint8_t addr = 0U;
+
+  if (!Ina226_FindAddress(&i2c2_bus, power_sensor_addr, &addr))
+  {
+    return false;
+  }
+
+  // 记住找到的地址，下次重试先试它
+  power_sensor_addr = addr;
+  return Ina226_Init(&power_sensor, &i2c2_bus, addr, POWER_SHUNT_OHM);
+}
+
+/**
+ * @brief 每周期读取一次功率；芯片未就绪时按间隔重试初始化
+ */
+static void PowerSensor_Update(void)
+{
+  if (!power_sensor.ready)
+  {
+    power_reading_valid = false;
+
+    // 不每个周期都重试，避免总线卡死时反复等超时
+    if (power_retry_countdown > 0U)
+    {
+      power_retry_countdown--;
+      return;
+    }
+
+    if (!PowerSensor_Start())
+    {
+      power_retry_countdown = POWER_RETRY_PERIODS;
+      return;
+    }
+  }
+
+  Ina226Reading_t reading;
+  power_reading_valid = Ina226_Read(&power_sensor, &reading);
+
+  if (power_reading_valid)
+  {
+    power_reading = reading;
   }
 }
 /* USER CODE END Application */
