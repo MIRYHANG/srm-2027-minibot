@@ -273,7 +273,9 @@ void StartChassisControlTask(void const * argument)
     osDelayUntil(&last_wake, 10U);
 
     // 底盘任务能执行到这里，并且其他任务均正常时才喂狗
-    if (TaskMonitor_AllAlive(HAL_GetTick()))
+    bool all_alive = TaskMonitor_AllAlive(HAL_GetTick());
+
+    if (all_alive)
     {
       HAL_IWDG_Refresh(&hiwdg);
     }
@@ -286,7 +288,7 @@ void StartChassisControlTask(void const * argument)
     RemoteCommand_t command;
     (void)Remote_GetLatest(&command);
 
-    if (!command.enabled || command.stop_requested)
+    if (!all_alive || !command.enabled || command.stop_requested)
     {
       Chassis_Stop();
 
@@ -657,10 +659,8 @@ static void PhoneRemote_Update(void)
     phone_arm.last_dpad = 0U;
     srm_parser_init(&phone_parser);
 
-    if (!RemoteUart_Recover())
-    {
-      return;
-    }
+    (void)RemoteUart_Recover();
+    return;
 
     return;
   }
