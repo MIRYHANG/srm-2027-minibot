@@ -661,8 +661,6 @@ static void PhoneRemote_Update(void)
 
     (void)RemoteUart_Recover();
     return;
-
-    return;
   }
 
   RemoteUartByte_t item;

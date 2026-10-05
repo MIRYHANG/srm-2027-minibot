@@ -54,8 +54,7 @@ void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, MOTOR_FL_DIR_Pin|MOTOR_FR_DIR_Pin|MOTOR_RL_DIR_Pin|MOTOR_RR_DIR_Pin
-                          |LED_RUN_Pin|LED_LINK_Pin|LED_FAULT_Pin|FL_FAULT_Pin
-                          |FR_FAULT_Pin|RL_FAULT_Pin|RR_FAULT_Pin, GPIO_PIN_RESET);
+                          |LED_RUN_Pin|LED_LINK_Pin|LED_FAULT_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(NRF_CSN_GPIO_Port, NRF_CSN_Pin, GPIO_PIN_SET);
@@ -75,17 +74,12 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : ESTOPN_Pin */
-  GPIO_InitStruct.Pin = ESTOPN_Pin;
+  /*Configure GPIO pins : ESTOPN_Pin FL_FAULT_Pin FR_FAULT_Pin RL_FAULT_Pin
+                           RR_FAULT_Pin */
+  GPIO_InitStruct.Pin = ESTOPN_Pin|FL_FAULT_Pin|FR_FAULT_Pin|RL_FAULT_Pin
+                          |RR_FAULT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(ESTOPN_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : FL_FAULT_Pin FR_FAULT_Pin RL_FAULT_Pin RR_FAULT_Pin */
-  GPIO_InitStruct.Pin = FL_FAULT_Pin|FR_FAULT_Pin|RL_FAULT_Pin|RR_FAULT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
   /*Configure GPIO pins : NRF_CSN_Pin NRF_CE_Pin */
