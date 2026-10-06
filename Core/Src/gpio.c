@@ -74,6 +74,18 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : BMI_INT3_Pin */
+  GPIO_InitStruct.Pin = BMI_INT3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(BMI_INT3_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : BMI_INT1_Pin */
+  GPIO_InitStruct.Pin = BMI_INT1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(BMI_INT1_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pins : ESTOPN_Pin FL_FAULT_Pin FR_FAULT_Pin RL_FAULT_Pin
                            RR_FAULT_Pin */
   GPIO_InitStruct.Pin = ESTOPN_Pin|FL_FAULT_Pin|FR_FAULT_Pin|RL_FAULT_Pin
@@ -95,6 +107,12 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : NRF_IRQ_Pin */
+  GPIO_InitStruct.Pin = NRF_IRQ_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(NRF_IRQ_GPIO_Port, &GPIO_InitStruct);
 
 }
 

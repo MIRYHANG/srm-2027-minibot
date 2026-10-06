@@ -82,6 +82,10 @@ void Error_Handler(void);
 #define ENC_FR_B_GPIO_Port GPIOA
 #define ENC_FR_A_Pin GPIO_PIN_6
 #define ENC_FR_A_GPIO_Port GPIOA
+#define BMI_INT3_Pin GPIO_PIN_4
+#define BMI_INT3_GPIO_Port GPIOC
+#define BMI_INT1_Pin GPIO_PIN_1
+#define BMI_INT1_GPIO_Port GPIOB
 #define LED_RUN_Pin GPIO_PIN_7
 #define LED_RUN_GPIO_Port GPIOE
 #define LED_LINK_Pin GPIO_PIN_8
@@ -136,6 +140,8 @@ void Error_Handler(void);
 #define BMI088_NRF_MISO_GPIO_Port GPIOB
 #define BMI088_NRF_MOSI_Pin GPIO_PIN_5
 #define BMI088_NRF_MOSI_GPIO_Port GPIOB
+#define NRF_IRQ_Pin GPIO_PIN_0
+#define NRF_IRQ_GPIO_Port GPIOE
 
 /* USER CODE BEGIN Private defines */
 
