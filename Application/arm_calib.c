@@ -7,6 +7,7 @@
 #include <math.h>
 #include <stddef.h>
 
+/*--------------------定义六个舵机的初始值，严格遵循结构组的数据手册---------------------------*/
 static const ArmJointCalib_t ARM_CALIB[ARM_JOINT_COUNT] =
 {
     [ARM_J1]      = {0.0f, 180.0f, 500U, 2500U, 60.0f},  // TODO：实物标定零位和方向
@@ -17,7 +18,7 @@ static const ArmJointCalib_t ARM_CALIB[ARM_JOINT_COUNT] =
     [ARM_GRIPPER] = {0.0f, 1.0f, 1000U, 2000U, 2.0f}    // TODO：实物标定零位和方向，并确定夹爪开合位置
 };
 
-// 调用者先检查标定项和输入，正负无穷分别裁剪到上下限
+/* ----------------------限幅函数------------------------- */
 static float ClampWithCalib(const ArmJointCalib_t *calib, float in)
 {
     if (in < calib->min_val)
@@ -31,6 +32,10 @@ static float ClampWithCalib(const ArmJointCalib_t *calib, float in)
     return in;
 }
 
+/**
+ * @brief 获取某个特定关节，在之后的“*calib=ArmCalib_Get(ARM_xx)”中可以通过calib直接操作对应关节舵机
+ * @return 返回标定项地址，否则返回 NULL
+ */
 const ArmJointCalib_t *ArmCalib_Get(int idx)
 {
     if (idx < 0 || idx >= ARM_JOINT_COUNT)
@@ -41,6 +46,10 @@ const ArmJointCalib_t *ArmCalib_Get(int idx)
     return &ARM_CALIB[idx];
 }
 
+/**
+ * @brief 本质还是限幅函数，摇杆一直推，机械臂到达最大值就不会继续动
+ * @return 成功返回 true，非法索引、空指针或 NaN 返回 false
+ */
 bool ArmCalib_Clamp(int idx, float in, float *out)
 {
     const ArmJointCalib_t *calib = ArmCalib_Get(idx);
@@ -52,11 +61,6 @@ bool ArmCalib_Clamp(int idx, float in, float *out)
     *out = ClampWithCalib(calib, in);
 
     return true;
-}
-
-bool ArmCalib_ToPulse(int idx, float val, uint16_t *pulse_us)
-{
-    return ArmCalib_ToPulseWithCalib(ArmCalib_Get(idx), val, pulse_us);
 }
 
 bool ArmCalib_ToPulseWithCalib(const ArmJointCalib_t *calib,

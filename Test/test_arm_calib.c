@@ -93,7 +93,7 @@ static void TestInvalidInput(void)
     uint16_t pulse = 1234U;
     assert(!ArmCalib_Clamp(ARM_J1, NAN, &clamped));
     assert(clamped == 42.0f);
-    assert(!ArmCalib_ToPulse(ARM_J1, NAN, &pulse));
+    assert(!ArmCalib_ToPulseWithCalib(ArmCalib_Get(ARM_J1), NAN, &pulse));
     assert(pulse == 1234U);
     assert(!ArmCalib_ToPulseWithCalib(&calib, NAN, &pulse));
     assert(pulse == 1234U);
@@ -104,11 +104,11 @@ static void TestInvalidInput(void)
     assert(!ArmCalib_Clamp(-1, 60.0f, &clamped));
     assert(!ArmCalib_Clamp(ARM_JOINT_COUNT, 60.0f, &clamped));
     assert(clamped == 42.0f);
-    assert(!ArmCalib_ToPulse(-1, 60.0f, &pulse));
-    assert(!ArmCalib_ToPulse(ARM_JOINT_COUNT, 60.0f, &pulse));
+    assert(!ArmCalib_ToPulseWithCalib(ArmCalib_Get(-1), 60.0f, &pulse));
+    assert(!ArmCalib_ToPulseWithCalib(ArmCalib_Get(ARM_JOINT_COUNT), 60.0f, &pulse));
     assert(pulse == 1234U);
     assert(!ArmCalib_Clamp(ARM_J1, 60.0f, NULL));
-    assert(!ArmCalib_ToPulse(ARM_J1, 60.0f, NULL));
+    assert(!ArmCalib_ToPulseWithCalib(ArmCalib_Get(ARM_J1), 60.0f, NULL));
     assert(!ArmCalib_ToPulseWithCalib(NULL, 60.0f, &pulse));
     assert(pulse == 1234U);
     assert(!ArmCalib_ToPulseWithCalib(&calib, 60.0f, NULL));

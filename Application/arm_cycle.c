@@ -18,7 +18,7 @@ static bool PoseToPulses(const ArmPose_t *pose, uint16_t pulse_us[])
 {
     for (int idx = 0; idx < ARM_JOINT_COUNT; idx++)
     {
-        if (!ArmCalib_ToPulse(idx, pose->joint[idx], &pulse_us[idx]))
+        if (!ArmCalib_ToPulseWithCalib(ArmCalib_Get(idx), pose->joint[idx], &pulse_us[idx]))
         {
             return false;
         }

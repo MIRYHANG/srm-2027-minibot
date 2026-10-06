@@ -33,7 +33,7 @@ static void AssertPulsesMatchCurrent(const ArmCycle_t *cycle)
     for (int idx = 0; idx < ARM_JOINT_COUNT; idx++)
     {
         uint16_t expected = 0U;
-        assert(ArmCalib_ToPulse(idx, cycle->current.joint[idx], &expected));
+        assert(ArmCalib_ToPulseWithCalib(ArmCalib_Get(idx), cycle->current.joint[idx], &expected));
         assert(cycle->pulse_us[idx] == expected);
     }
 }
