@@ -9,10 +9,12 @@
 
 #include "arm_calib.h"
 
+/*-----------------手臂伸出去、夹爪对准地面矿石的姿态，到了矿石旁边先切换到这个姿态，再用摇杆微调--------------*/
 static const ArmPose_t PRESET_GRAB_READY = {
     {90.0f, 60.0f, 120.0f, 135.0f, 90.0f, ARM_GRIPPER_OPEN} // TODO：实物测量
 };
 
+/*-----------------把机械臂收拢起来的姿态，用于行驶和运输时，重心低--------------------*/
 static const ArmPose_t PRESET_STOW = {
     {90.0f, 30.0f, 30.0f, 90.0f, 90.0f, ARM_GRIPPER_OPEN}   // TODO：实物测量
 };
@@ -24,7 +26,6 @@ void ArmControl_Init(ArmControl_t *control)
         return;
     }
 
-    // 初始时没有可执行的目标姿态
     *control = (ArmControl_t){0};
 }
 
@@ -107,7 +108,7 @@ bool ArmControl_GetPreset(ArmPreset_t preset, ArmPose_t *out)
  */
 static bool UpdateInputsValid(const ArmControl_t *control,
                               const ArmPose_t *current,
-                              const ArmRemoteCommand_t *cmd,
+                              const ArmMotionCmd_t *cmd,
                               float dt_s)
 {
     if (control == NULL || current == NULL || cmd == NULL)
@@ -212,7 +213,7 @@ static bool ApplyJog(const ArmPose_t *current, const float jog[],
  * @brief 按夹紧 / 松开请求更新夹爪目标，jog[ARM_GRIPPER] 一律忽略
  * @note 两个都按或都不按时保持不变
  */
-static void ApplyGripper(const ArmRemoteCommand_t *cmd, ArmPose_t *target)
+static void ApplyGripper(const ArmMotionCmd_t *cmd, ArmPose_t *target)
 {
     if (cmd->gripper_close == cmd->gripper_open)
     {
@@ -224,7 +225,7 @@ static void ApplyGripper(const ArmRemoteCommand_t *cmd, ArmPose_t *target)
 }
 
 bool ArmControl_Update(ArmControl_t *control, const ArmPose_t *current,
-                       const ArmRemoteCommand_t *cmd, float dt_s)
+                       const ArmMotionCmd_t *cmd, float dt_s)
 {
     if (!UpdateInputsValid(control, current, cmd, dt_s))
     {

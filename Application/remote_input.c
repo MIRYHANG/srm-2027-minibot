@@ -21,7 +21,7 @@ static bool AxisValid(float value)
  * @param arm 待检查的机械臂命令，调用方保证指针非空
  * @return 全部有效返回 true，任一关节越界、为 NaN 或预设非法时返回 false
  */
-static bool ArmCommandValid(const ArmRemoteCommand_t *arm)
+static bool ArmCommandValid(const ArmMotionCmd_t *arm)
 {
     // 只接受定义过的三种预设值，防止非法枚举进入后续机械臂逻辑
     if (arm->preset != ARM_PRESET_NONE &&
@@ -41,6 +41,47 @@ static bool ArmCommandValid(const ArmRemoteCommand_t *arm)
     }
 
     return true;
+}
+
+/**
+ * @brief 取当前选中来源的状态，要求收到过有效帧且未超时
+ * @param input 遥控输入管理对象指针
+ * @param now_ms 当前时间，单位为毫秒
+ * @param timeout_ms 有效命令允许的最长间隔，为零时视为全部超时
+ * @return 满足条件时返回该来源状态；参数无效、未选择来源、没有有效帧或超时时返回 NULL
+ */
+static const RemoteState_t *FreshSelectedState(const RemoteInput_t *input,
+                                               uint32_t now_ms,
+                                               uint32_t timeout_ms)
+{
+    if (input == NULL || timeout_ms == 0U)
+    {
+        return NULL;
+    }
+
+    // 只读取当前选中的来源
+    const RemoteState_t *state;
+    if (input->selected == REMOTE_SOURCE_PHONE)
+    {
+        state = &input->phone;
+    }
+    else if (input->selected == REMOTE_SOURCE_HANDHELD)
+    {
+        state = &input->handheld;
+    }
+    else
+    {
+        return NULL;
+    }
+
+    // 无符号相减，计时器回绕时间隔仍然正确
+    if (!state->has_valid_frame ||
+        (uint32_t)(now_ms - state->last_valid_ms) > timeout_ms)
+    {
+        return NULL;
+    }
+
+    return state;
 }
 
 /**
@@ -167,31 +208,15 @@ RemoteCommand_t RemoteInput_GetSafe(const RemoteInput_t *input,
     // 先准备全零命令，不安全时底盘停机且机械臂保持当前位置
     RemoteCommand_t zero = {0};
 
-    // 无管理对象或超时阈值为零时，不允许输出运动命令
-    if (input == NULL || timeout_ms == 0U)
+    // 未选择来源、没有有效帧或已超时时保持零输出
+    const RemoteState_t *state = FreshSelectedState(input, now_ms, timeout_ms);
+    if (state == NULL)
     {
         return zero;
     }
 
-    // 只读取当前选中的来源；未选择来源时保持零输出
-    const RemoteState_t *state;
-    if (input->selected == REMOTE_SOURCE_PHONE)
-    {
-        state = &input->phone;
-    }
-    else if (input->selected == REMOTE_SOURCE_HANDHELD)
-    {
-        state = &input->handheld;
-    }
-    else
-    {
-        return zero;
-    }
-
-    // 没有有效帧、帧已超时、未使能、请求停机或尚未重新上锁时都不能使用旧命令
-    if (!state->has_valid_frame ||
-        (uint32_t)(now_ms - state->last_valid_ms) > timeout_ms ||
-        !state->command.enabled ||
+    // 未使能、请求停机或尚未重新上锁时都不能使用旧命令
+    if (!state->command.enabled ||
         state->command.stop_requested ||
         !state->armed)
     {
@@ -200,4 +225,20 @@ RemoteCommand_t RemoteInput_GetSafe(const RemoteInput_t *input,
 
     // 所有安全条件均满足，返回选中来源保存的完整命令
     return state->command;
+}
+
+/**
+ * @brief 判断操作手是否在当前来源上关闭了使能
+ * @param input 遥控输入管理对象指针
+ * @param now_ms 当前时间，单位为毫秒
+ * @param timeout_ms 有效命令允许的最长间隔，单位为毫秒
+ * @return 当前来源有一帧未超时、enabled=false 的有效命令时返回 true
+ * @note 供急停复位使用。超时或未选择来源时 GetSafe 也返回 enabled=false 的零命令，
+ *       但那不代表操作手关过使能，所以这里必须返回 false
+ */
+bool RemoteInput_OperatorDisabled(const RemoteInput_t *input,
+                                  uint32_t now_ms, uint32_t timeout_ms)
+{
+    const RemoteState_t *state = FreshSelectedState(input, now_ms, timeout_ms);
+    return state != NULL && !state->command.enabled;
 }

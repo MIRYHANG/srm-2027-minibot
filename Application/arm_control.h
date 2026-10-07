@@ -58,5 +58,5 @@ bool ArmControl_GetPreset(ArmPreset_t preset, ArmPose_t *out);
  * @note 这里只更新目标，不驱动舵机
  */
 bool ArmControl_Update(ArmControl_t *control, const ArmPose_t *current,
-                       const ArmRemoteCommand_t *cmd, float dt_s);
+                       const ArmMotionCmd_t *cmd, float dt_s);
 #endif //XIAOSAI_ARM_CONTROL_H
