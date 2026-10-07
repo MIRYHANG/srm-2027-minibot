@@ -57,7 +57,7 @@ static float MaxStep(int idx)
 static ArmControl_t ControlAt(const ArmPose_t *current)
 {
     ArmControl_t control;
-    ArmRemoteCommand_t zero = {0};
+    ArmMotionCmd_t zero = {0};
 
     ArmControl_Init(&control);
     assert(ArmControl_Update(&control, current, &zero, DT_S));
@@ -67,7 +67,7 @@ static ArmControl_t ControlAt(const ArmPose_t *current)
 
 /* 非法调用必须返回 false，且 control 逐字节不变 */
 static void AssertRejected(ArmControl_t *control, const ArmPose_t *current,
-                           const ArmRemoteCommand_t *cmd, float dt_s)
+                           const ArmMotionCmd_t *cmd, float dt_s)
 {
     ArmControl_t saved;
     memcpy(&saved, control, sizeof(saved));
@@ -107,7 +107,7 @@ static void TestPresets(void)
 
 static void TestFirstUpdateAdoptsCurrent(void)
 {
-    ArmRemoteCommand_t zero = {0};
+    ArmMotionCmd_t zero = {0};
     ArmControl_t control;
     ArmPose_t target;
 
@@ -142,7 +142,7 @@ static void TestJogStep(void)
         {
             ArmPose_t current = PoseAt(0.5f);
             ArmControl_t control = ControlAt(&current);
-            ArmRemoteCommand_t cmd = {0};
+            ArmMotionCmd_t cmd = {0};
             cmd.jog[joint] = jogs[j];
 
             assert(ArmControl_Update(&control, &current, &cmd, DT_S));
@@ -170,7 +170,7 @@ static void TestJogClampedAtLimits(void)
         const ArmJointCalib_t *calib = ArmCalib_Get(joint);
         assert(calib != NULL);
 
-        ArmRemoteCommand_t cmd = {0};
+        ArmMotionCmd_t cmd = {0};
 
         ArmPose_t current = PoseAt(1.0f);
         ArmControl_t control = ControlAt(&current);
@@ -195,7 +195,7 @@ static void TestJogUsesCurrentAndReleaseHolds(void)
     ArmPose_t current = PoseAt(0.25f);
     assert(current.joint[ARM_J1] != stow.joint[ARM_J1]);
     ArmControl_t control = ControlAt(&current);
-    ArmRemoteCommand_t cmd = {0};
+    ArmMotionCmd_t cmd = {0};
 
     // 先用预设把目标拉远，再 jog J1：基准必须是 current，不是旧目标
     cmd.preset = ARM_PRESET_STOW;
@@ -209,7 +209,7 @@ static void TestJogUsesCurrentAndReleaseHolds(void)
 
     // 松手后 target 不变，即使 current 继续变化
     ArmControl_t saved = control;
-    ArmRemoteCommand_t zero = {0};
+    ArmMotionCmd_t zero = {0};
     ArmPose_t moved = PoseAt(0.75f);
     assert(ArmControl_Update(&control, &moved, &zero, DT_S));
     AssertPoseEqual(&control.target, &saved.target);
@@ -222,7 +222,7 @@ static void TestPresetBehaviour(void)
 
     ArmPose_t current = PoseAt(0.5f);
     ArmControl_t control = ControlAt(&current);
-    ArmRemoteCommand_t cmd = {0};
+    ArmMotionCmd_t cmd = {0};
 
     // 预设和 jog 同时出现：jog 被忽略，J1～J5 等于预设
     cmd.preset = ARM_PRESET_STOW;
@@ -236,7 +236,7 @@ static void TestPresetBehaviour(void)
     }
 
     // 松开预设后目标仍是预设值，让动作继续执行完
-    ArmRemoteCommand_t zero = {0};
+    ArmMotionCmd_t zero = {0};
     ArmControl_t saved = control;
     assert(ArmControl_Update(&control, &current, &zero, DT_S));
     AssertPoseEqual(&control.target, &saved.target);
@@ -246,7 +246,7 @@ static void TestPresetKeepsGripper(void)
 {
     ArmPose_t current = PoseAt(0.5f);
     ArmControl_t control = ControlAt(&current);
-    ArmRemoteCommand_t cmd = {0};
+    ArmMotionCmd_t cmd = {0};
 
     cmd.gripper_close = true;
     assert(ArmControl_Update(&control, &current, &cmd, DT_S));
@@ -269,7 +269,7 @@ static void TestGripper(void)
     ArmPose_t current = PoseAt(0.5f);
     ArmControl_t control = ControlAt(&current);
     float initial = control.target.joint[ARM_GRIPPER];
-    ArmRemoteCommand_t cmd = {0};
+    ArmMotionCmd_t cmd = {0};
 
     // jog[ARM_GRIPPER] 不影响夹爪
     cmd.jog[ARM_GRIPPER] = 1.0f;
@@ -301,7 +301,7 @@ static void TestZeroCommandHolds(void)
     ArmPose_t current = PoseAt(0.3f);
     ArmControl_t control = ControlAt(&current);
     ArmControl_t saved = control;
-    ArmRemoteCommand_t zero = {0};
+    ArmMotionCmd_t zero = {0};
 
     for (int count = 0; count < 100; count++)
     {
@@ -317,7 +317,7 @@ static void TestInvalidInputs(void)
     ArmPose_t current = PoseAt(0.5f);
     ArmControl_t control = ControlAt(&current);
     ArmControl_t fresh;
-    ArmRemoteCommand_t zero = {0};
+    ArmMotionCmd_t zero = {0};
 
     ArmControl_Init(&fresh);
 
@@ -353,14 +353,14 @@ static void TestInvalidInputs(void)
     {
         for (size_t idx = 0; idx < sizeof(bad_jog) / sizeof(bad_jog[0]); idx++)
         {
-            ArmRemoteCommand_t cmd = {0};
+            ArmMotionCmd_t cmd = {0};
             cmd.jog[joint] = bad_jog[idx];
             AssertRejected(&control, &current, &cmd, DT_S);
         }
     }
 
     // 非法预设
-    ArmRemoteCommand_t bad_preset = {0};
+    ArmMotionCmd_t bad_preset = {0};
     bad_preset.preset = (ArmPreset_t)99;
     AssertRejected(&control, &current, &bad_preset, DT_S);
 
@@ -405,7 +405,7 @@ static void TestBasicApi(void)
     assert(!control.has_target);
 
     ArmPose_t current = PoseAt(0.75f);
-    ArmRemoteCommand_t zero = {0};
+    ArmMotionCmd_t zero = {0};
     assert(ArmControl_Update(&control, &current, &zero, DT_S));
     AssertPoseEqual(&control.target, &current);
 }

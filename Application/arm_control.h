@@ -6,7 +6,7 @@
 #define XIAOSAI_ARM_CONTROL_H
 
 #include "arm_pose.h"
-#include "remote_input.h"
+#include "robot_def.h"
 
 typedef struct
 {
