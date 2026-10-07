@@ -8,7 +8,7 @@
 #include "arm_pose.h"
 
 /**
- * @brief 让当前位姿按各关节速度上限向目标位姿移动一个时间步
+ * @brief 让舵机从当前值向目标值移动一小步
  * @param current 当前位姿
  * @param target 目标位姿，越界值会裁剪到标定限位
  * @param dt_s 本次更新的时间间隔，单位为秒
