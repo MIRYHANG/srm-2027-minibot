@@ -187,12 +187,26 @@ static void PowerSensor_Update(void);
 static ResetCause_t ResetCause_FromFlags(uint32_t flags);
 static void Oled_Update(void);
 
+/**
+ * @brief 临时把遥控命令转换成机械臂命令，行为和改动前一致
+ * @note robot_cmd 接入后删除
+ */
+static ArmCmd_t ArmCmd_FromRemote(const RemoteCommand_t *remote)
+{
+  if (remote == NULL || !remote->enabled || remote->stop_requested)
+  {
+    return (ArmCmd_t){0};
+  }
+  return (ArmCmd_t){.enabled = true, .motion = remote->arm};
+}
+
 /* USER CODE END FunctionPrototypes */
 
 void StartChassisControlTask(void const * argument);
 void StartArmTask(void const * argument);
 void StartProtocolTask(void const * argument);
 void StartSensorTask(void const * argument);
+
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -389,9 +403,10 @@ void StartArmTask(void const * argument)
     // 命令过期时得到全零命令，enabled 为 false，机械臂当场停住
     RemoteCommand_t command;
     (void)Remote_GetLatest(&command);
+    ArmCmd_t arm_cmd = ArmCmd_FromRemote(&command);
 
     // 失败时保持上一次的脉宽：不停 PWM，也不输出 0，舵机继续出力
-    if (ArmCycle_Step(&arm_cycle, &command, dt_s))
+    if (ArmCycle_Step(&arm_cycle, &arm_cmd, dt_s))
     {
       ArmServos_Apply(arm_cycle.pulse_us);
     }
