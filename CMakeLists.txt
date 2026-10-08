@@ -78,6 +78,9 @@ add_executable(${CMAKE_PROJECT_NAME}
         BSP/ssd1306.h
         Application/power_display.c
         Application/power_display.h
+        Application/safety_input.c
+        Application/safety_input.h
+        Application/robot_def.h
 )
 
 # Add STM32CubeMX generated sources
