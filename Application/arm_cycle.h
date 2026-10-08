@@ -10,7 +10,7 @@
 
 #include "arm_control.h"
 #include "arm_pose.h"
-#include "remote_input.h"
+#include "robot_def.h"
 
 // 单周期允许的最大时间步，超过时按此值计算，防止任务被延迟后一步跳得太远
 #define ARM_CYCLE_MAX_DT_S 0.06f
@@ -33,11 +33,11 @@ bool ArmCycle_Init(ArmCycle_t *cycle);
 /**
  * @brief 执行一个控制周期：更新目标 → 限速逼近 → 换算脉宽
  * @param cycle 已初始化的状态
- * @param cmd 本周期的遥控命令
+ * @param cmd 本周期的机械臂命令
  * @param dt_s 距上次调用的时间，单位为秒，超过 ARM_CYCLE_MAX_DT_S 时按上限计算
  * @return 成功返回 true；任一步失败返回 false，且不修改 cycle
  * @note 未使能或请求停机时，目标拉回当前位置，机械臂当场停住但不卸力
  */
-bool ArmCycle_Step(ArmCycle_t *cycle, const RemoteCommand_t *cmd, float dt_s);
+bool ArmCycle_Step(ArmCycle_t *cycle, const ArmCmd_t *cmd, float dt_s);
 
 #endif //XIAOSAI_ARM_CYCLE_H

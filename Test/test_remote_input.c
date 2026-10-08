@@ -163,6 +163,40 @@ static void TestInvalidFrameCannotArm(void)
     ExpectZero(RemoteInput_GetSafe(&input, 111U, 200U));
 }
 
+/* 只有当前来源未超时、关闭使能的有效帧才算操作手已关闭使能 */
+static void TestOperatorDisabled(void)
+{
+    RemoteInput_t input;
+    RemoteInput_Init(&input);
+
+    // 未选择来源
+    assert(!RemoteInput_OperatorDisabled(&input, 100U, 200U));
+
+    RemoteInput_Select(&input, REMOTE_SOURCE_PHONE);
+    // 还没有收到任何帧
+    assert(!RemoteInput_OperatorDisabled(&input, 100U, 200U));
+
+    // 未选中的来源发来的关闭帧不算
+    RemoteCommand_t disabled = DisabledCommand();
+    assert(RemoteInput_Update(&input, REMOTE_SOURCE_HANDHELD,
+                              &disabled, 100U));
+    assert(!RemoteInput_OperatorDisabled(&input, 101U, 200U));
+
+    assert(RemoteInput_Update(&input, REMOTE_SOURCE_PHONE,
+                              &disabled, 100U));
+    assert(RemoteInput_OperatorDisabled(&input, 300U, 200U));
+    // 超时后零命令不能被当作操作手关闭了使能
+    assert(!RemoteInput_OperatorDisabled(&input, 301U, 200U));
+
+    RemoteCommand_t enabled = EnabledCommand();
+    assert(RemoteInput_Update(&input, REMOTE_SOURCE_PHONE,
+                              &enabled, 400U));
+    assert(!RemoteInput_OperatorDisabled(&input, 401U, 200U));
+
+    assert(!RemoteInput_OperatorDisabled(NULL, 401U, 200U));
+    assert(!RemoteInput_OperatorDisabled(&input, 401U, 0U));
+}
+
 int main(void)
 {
     TestStartupLock();
@@ -170,7 +204,8 @@ int main(void)
     TestSwitchRequiresRearm();
     TestStopRequest();
     TestInvalidFrameCannotArm();
+    TestOperatorDisabled();
 
     puts("Remote input tests passed");
     return 0;
-}
+}

@@ -59,7 +59,7 @@ bool ArmCycle_Init(ArmCycle_t *cycle)
     return true;
 }
 
-bool ArmCycle_Step(ArmCycle_t *cycle, const RemoteCommand_t *cmd, float dt_s)
+bool ArmCycle_Step(ArmCycle_t *cycle, const ArmCmd_t *cmd, float dt_s)
 {
     if (cycle == NULL || cmd == NULL || !cycle->initialized)
     {
@@ -79,7 +79,7 @@ bool ArmCycle_Step(ArmCycle_t *cycle, const RemoteCommand_t *cmd, float dt_s)
     // 全部计算在局部副本里完成，失败时 cycle 保持不变
     ArmCycle_t next = *cycle;
 
-    if (!cmd->enabled || cmd->stop_requested)
+    if (!cmd->enabled)
     {
         // 未使能、急停或失联：目标拉回当前位置，正在执行的预设也停下
         if (!ArmControl_SetTarget(&next.control, &next.current))
@@ -87,7 +87,7 @@ bool ArmCycle_Step(ArmCycle_t *cycle, const RemoteCommand_t *cmd, float dt_s)
             return false;
         }
     }
-    else if (!ArmControl_Update(&next.control, &next.current, &cmd->arm, dt_s))
+    else if (!ArmControl_Update(&next.control, &next.current, &cmd->motion, dt_s))
     {
         return false;
     }

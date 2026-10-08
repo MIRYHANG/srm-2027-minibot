@@ -38,9 +38,9 @@ static void AssertPulsesMatchCurrent(const ArmCycle_t *cycle)
     }
 }
 
-static RemoteCommand_t EnabledCommand(void)
+static ArmCmd_t EnabledCommand(void)
 {
-    RemoteCommand_t cmd = {0};
+    ArmCmd_t cmd = {0};
     cmd.enabled = true;
     return cmd;
 }
@@ -54,7 +54,7 @@ static ArmCycle_t InitCycle(void)
 }
 
 /* 非法调用必须返回 false，且 cycle 逐字节不变 */
-static void AssertRejected(ArmCycle_t *cycle, const RemoteCommand_t *cmd,
+static void AssertRejected(ArmCycle_t *cycle, const ArmCmd_t *cmd,
                            float dt_s)
 {
     ArmCycle_t saved;
@@ -83,7 +83,7 @@ static void TestInitIsStow(void)
 static void TestInvalidInputs(void)
 {
     ArmCycle_t cycle = InitCycle();
-    RemoteCommand_t cmd = EnabledCommand();
+    ArmCmd_t cmd = EnabledCommand();
 
     assert(!ArmCycle_Step(NULL, &cmd, DT_S));
     AssertRejected(&cycle, NULL, DT_S);
@@ -100,21 +100,21 @@ static void TestInvalidInputs(void)
     AssertRejected(&zero_cycle, &cmd, DT_S);
 
     // 机械臂命令非法：整步失败，保持上一次的位姿和脉宽
-    cmd.arm.jog[ARM_J1] = NAN;
+    cmd.motion.jog[ARM_J1] = NAN;
     AssertRejected(&cycle, &cmd, DT_S);
 }
 
 static void TestJogMovesAndUpdatesPulse(void)
 {
     ArmCycle_t cycle = InitCycle();
-    RemoteCommand_t cmd = EnabledCommand();
+    ArmCmd_t cmd = EnabledCommand();
     const ArmJointCalib_t *j1 = ArmCalib_Get(ARM_J1);
     assert(j1 != NULL);
 
     float start = cycle.current.joint[ARM_J1];
     uint16_t start_pulse = cycle.pulse_us[ARM_J1];
 
-    cmd.arm.jog[ARM_J1] = 1.0f;
+    cmd.motion.jog[ARM_J1] = 1.0f;
     assert(ArmCycle_Step(&cycle, &cmd, DT_S));
     AssertNear(cycle.current.joint[ARM_J1],
                start + j1->max_speed_per_s * DT_S);
@@ -123,7 +123,7 @@ static void TestJogMovesAndUpdatesPulse(void)
 
     // 松手后当场停住
     ArmPose_t stopped = cycle.current;
-    cmd.arm.jog[ARM_J1] = 0.0f;
+    cmd.motion.jog[ARM_J1] = 0.0f;
     for (int count = 0; count < 10; count++)
     {
         assert(ArmCycle_Step(&cycle, &cmd, DT_S));
@@ -134,14 +134,14 @@ static void TestJogMovesAndUpdatesPulse(void)
 static void TestDtClamped(void)
 {
     ArmCycle_t cycle = InitCycle();
-    RemoteCommand_t cmd = EnabledCommand();
+    ArmCmd_t cmd = EnabledCommand();
     const ArmJointCalib_t *j1 = ArmCalib_Get(ARM_J1);
     assert(j1 != NULL);
 
     float start = cycle.current.joint[ARM_J1];
 
     // 任务被延迟 1 s，也只按 ARM_CYCLE_MAX_DT_S 走一步
-    cmd.arm.jog[ARM_J1] = 1.0f;
+    cmd.motion.jog[ARM_J1] = 1.0f;
     assert(ArmCycle_Step(&cycle, &cmd, 1.0f));
     AssertNear(cycle.current.joint[ARM_J1],
                start + j1->max_speed_per_s * ARM_CYCLE_MAX_DT_S);
@@ -154,12 +154,12 @@ static void TestPresetRunsToEnd(void)
 
     ArmCycle_t cycle = InitCycle();
     float gripper = cycle.current.joint[ARM_GRIPPER];
-    RemoteCommand_t cmd = EnabledCommand();
+    ArmCmd_t cmd = EnabledCommand();
 
     // 只按一帧，之后全零命令，预设也要走完
-    cmd.arm.preset = ARM_PRESET_GRAB_READY;
+    cmd.motion.preset = ARM_PRESET_GRAB_READY;
     assert(ArmCycle_Step(&cycle, &cmd, DT_S));
-    cmd.arm.preset = ARM_PRESET_NONE;
+    cmd.motion.preset = ARM_PRESET_NONE;
 
     for (int count = 0; count < 500; count++)
     {
@@ -175,12 +175,12 @@ static void TestPresetRunsToEnd(void)
 }
 
 /* 预设执行到一半时停机，机械臂必须当场停住，恢复后也不能继续执行预设 */
-static void AssertStopFreezes(RemoteCommand_t stop_cmd)
+static void AssertStopFreezes(ArmCmd_t stop_cmd)
 {
     ArmCycle_t cycle = InitCycle();
-    RemoteCommand_t cmd = EnabledCommand();
+    ArmCmd_t cmd = EnabledCommand();
 
-    cmd.arm.preset = ARM_PRESET_GRAB_READY;
+    cmd.motion.preset = ARM_PRESET_GRAB_READY;
     for (int count = 0; count < 5; count++)
     {
         assert(ArmCycle_Step(&cycle, &cmd, DT_S));
@@ -199,7 +199,7 @@ static void AssertStopFreezes(RemoteCommand_t stop_cmd)
     AssertPoseEqual(&cycle.current, &before_stop.current);
 
     // 恢复使能、不按任何键：预设不会自己接着走
-    RemoteCommand_t idle = EnabledCommand();
+    ArmCmd_t idle = EnabledCommand();
     for (int count = 0; count < 50; count++)
     {
         assert(ArmCycle_Step(&cycle, &idle, DT_S));
@@ -209,29 +209,23 @@ static void AssertStopFreezes(RemoteCommand_t stop_cmd)
 
 static void TestStopFreezes(void)
 {
-    // 未使能，等同于遥控超时后收到的全零命令
-    RemoteCommand_t disabled = {0};
-    disabled.arm.preset = ARM_PRESET_GRAB_READY;
-    disabled.arm.jog[ARM_J1] = 1.0f;
+    // 未使能时即使带着运动命令，也必须当场停住
+    ArmCmd_t disabled = {0};
+    disabled.motion.preset = ARM_PRESET_GRAB_READY;
+    disabled.motion.jog[ARM_J1] = 1.0f;
     AssertStopFreezes(disabled);
-
-    // 使能但请求停机
-    RemoteCommand_t stopped = EnabledCommand();
-    stopped.stop_requested = true;
-    stopped.arm.jog[ARM_J1] = 1.0f;
-    AssertStopFreezes(stopped);
 }
 
 static void TestGripperSpeedLimited(void)
 {
     ArmCycle_t cycle = InitCycle();
-    RemoteCommand_t cmd = EnabledCommand();
+    ArmCmd_t cmd = EnabledCommand();
     const ArmJointCalib_t *gripper = ArmCalib_Get(ARM_GRIPPER);
     assert(gripper != NULL);
 
     float start = cycle.current.joint[ARM_GRIPPER];
 
-    cmd.arm.gripper_close = true;
+    cmd.motion.gripper_close = true;
     assert(ArmCycle_Step(&cycle, &cmd, DT_S));
     AssertNear(cycle.current.joint[ARM_GRIPPER],
                start + gripper->max_speed_per_s * DT_S);
@@ -250,10 +244,10 @@ static void TestCorruptedStateRejected(void)
     ArmCycle_t cycle = InitCycle();
     cycle.current.joint[ARM_J2] = NAN;
 
-    RemoteCommand_t disabled = {0};
+    ArmCmd_t disabled = {0};
     AssertRejected(&cycle, &disabled, DT_S);
 
-    RemoteCommand_t enabled = EnabledCommand();
+    ArmCmd_t enabled = EnabledCommand();
     AssertRejected(&cycle, &enabled, DT_S);
 }
 
