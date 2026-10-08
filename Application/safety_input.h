@@ -38,11 +38,4 @@ void SafetyInput_Init(SafetyInput_t *state);
  */
 uint8_t SafetyInput_Update(SafetyInput_t *state, uint8_t raw);
 
-/**
- * @brief 生成 OLED 上的一行说明，例如 "ESTOP"、"FAULT FL RR"，没有有效输入时为空字符串
- * @note 急停优先显示；输出总以 '\0' 结尾，放不下时截断
- */
-void SafetyInput_Describe(uint8_t active, char *out, size_t size);
-
-
 #endif //XIAOSAI_SAFETY_INPUT_H
