@@ -44,11 +44,8 @@ typedef struct
 
 void RemoteInput_Init(RemoteInput_t *input);
 void RemoteInput_Select(RemoteInput_t *input, RemoteSource_t source);
-bool RemoteInput_Update(RemoteInput_t *input, RemoteSource_t source,
-                        const RemoteCommand_t *command, uint32_t now_ms);
-RemoteCommand_t RemoteInput_GetSafe(const RemoteInput_t *input,
-                                    uint32_t now_ms, uint32_t timeout_ms);
-bool RemoteInput_OperatorDisabled(const RemoteInput_t *input,
-                                  uint32_t now_ms, uint32_t timeout_ms);
+bool RemoteInput_Update(RemoteInput_t *input, RemoteSource_t source,const RemoteCommand_t *command, uint32_t now_ms);
+RemoteCommand_t RemoteInput_GetSafe(const RemoteInput_t *input,uint32_t now_ms, uint32_t timeout_ms);
+bool RemoteInput_GetLatest(const RemoteInput_t *input, uint32_t now_ms,uint32_t timeout_ms, RemoteCommand_t *out);
 
 #endif

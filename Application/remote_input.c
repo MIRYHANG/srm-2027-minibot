@@ -44,15 +44,13 @@ static bool ArmCommandValid(const ArmMotionCmd_t *arm)
 }
 
 /**
- * @brief 取当前选中来源的状态，要求收到过有效帧且未超时
+ * @brief 本质取出输入项判断是手机遥控或是遥控器遥控
  * @param input 遥控输入管理对象指针
  * @param now_ms 当前时间，单位为毫秒
  * @param timeout_ms 有效命令允许的最长间隔，为零时视为全部超时
  * @return 满足条件时返回该来源状态；参数无效、未选择来源、没有有效帧或超时时返回 NULL
  */
-static const RemoteState_t *FreshSelectedState(const RemoteInput_t *input,
-                                               uint32_t now_ms,
-                                               uint32_t timeout_ms)
+static const RemoteState_t *FreshSelectedState(const RemoteInput_t *input,uint32_t now_ms,uint32_t timeout_ms)
 {
     if (input == NULL || timeout_ms == 0U)
     {
@@ -74,7 +72,6 @@ static const RemoteState_t *FreshSelectedState(const RemoteInput_t *input,
         return NULL;
     }
 
-    // 无符号相减，计时器回绕时间隔仍然正确
     if (!state->has_valid_frame ||
         (uint32_t)(now_ms - state->last_valid_ms) > timeout_ms)
     {
@@ -228,17 +225,29 @@ RemoteCommand_t RemoteInput_GetSafe(const RemoteInput_t *input,
 }
 
 /**
- * @brief 判断操作手是否在当前来源上关闭了使能
+ * @brief 仅读取当前来源最近一帧有效命令
  * @param input 遥控输入管理对象指针
  * @param now_ms 当前时间，单位为毫秒
  * @param timeout_ms 有效命令允许的最长间隔，单位为毫秒
- * @return 当前来源有一帧未超时、enabled=false 的有效命令时返回 true
- * @note 供急停复位使用。超时或未选择来源时 GetSafe 也返回 enabled=false 的零命令，
- *       但那不代表操作手关过使能，所以这里必须返回 false
+ * @param out 输出命令；离线时写入全零
+ * @return 已选择来源、收到过有效帧且未超时返回 true，否则返回 false
  */
-bool RemoteInput_OperatorDisabled(const RemoteInput_t *input,
-                                  uint32_t now_ms, uint32_t timeout_ms)
+bool RemoteInput_GetLatest(const RemoteInput_t *input, uint32_t now_ms,
+                           uint32_t timeout_ms, RemoteCommand_t *out)
 {
+    if (out == NULL)
+    {
+        return false;
+    }
+
+    /*-------------防止出现没选来源 / 没收到帧 / 超时 / 参数非法----------------*/
     const RemoteState_t *state = FreshSelectedState(input, now_ms, timeout_ms);
-    return state != NULL && !state->command.enabled;
+    if (state == NULL)
+    {
+        *out = (RemoteCommand_t){0};
+        return false;
+    }
+
+    *out = state->command;
+    return true;
 }

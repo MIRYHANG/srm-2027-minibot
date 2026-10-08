@@ -163,38 +163,43 @@ static void TestInvalidFrameCannotArm(void)
     ExpectZero(RemoteInput_GetSafe(&input, 111U, 200U));
 }
 
-/* 只有当前来源未超时、关闭使能的有效帧才算操作手已关闭使能 */
-static void TestOperatorDisabled(void)
+/* GetLatest 只判断在线与否，不管使能、急停和复位 */
+static void TestGetLatest(void)
 {
     RemoteInput_t input;
     RemoteInput_Init(&input);
+    RemoteCommand_t out = EnabledCommand();
 
-    // 未选择来源
-    assert(!RemoteInput_OperatorDisabled(&input, 100U, 200U));
+    // 未选择来源：离线，输出清零
+    assert(!RemoteInput_GetLatest(&input, 100U, 200U, &out));
+    ExpectZero(out);
 
+    // 选了来源但还没收到帧
     RemoteInput_Select(&input, REMOTE_SOURCE_PHONE);
-    // 还没有收到任何帧
-    assert(!RemoteInput_OperatorDisabled(&input, 100U, 200U));
+    assert(!RemoteInput_GetLatest(&input, 100U, 200U, &out));
 
-    // 未选中的来源发来的关闭帧不算
-    RemoteCommand_t disabled = DisabledCommand();
-    assert(RemoteInput_Update(&input, REMOTE_SOURCE_HANDHELD,
-                              &disabled, 100U));
-    assert(!RemoteInput_OperatorDisabled(&input, 101U, 200U));
-
-    assert(RemoteInput_Update(&input, REMOTE_SOURCE_PHONE,
-                              &disabled, 100U));
-    assert(RemoteInput_OperatorDisabled(&input, 300U, 200U));
-    // 超时后零命令不能被当作操作手关闭了使能
-    assert(!RemoteInput_OperatorDisabled(&input, 301U, 200U));
-
+    // 未选中来源发来的帧不算
     RemoteCommand_t enabled = EnabledCommand();
-    assert(RemoteInput_Update(&input, REMOTE_SOURCE_PHONE,
-                              &enabled, 400U));
-    assert(!RemoteInput_OperatorDisabled(&input, 401U, 200U));
+    assert(RemoteInput_Update(&input, REMOTE_SOURCE_HANDHELD, &enabled, 100U));
+    assert(!RemoteInput_GetLatest(&input, 101U, 200U, &out));
 
-    assert(!RemoteInput_OperatorDisabled(NULL, 401U, 200U));
-    assert(!RemoteInput_OperatorDisabled(&input, 401U, 0U));
+    // 未复位、请求停机的帧也原样返回，这些由 RobotCmd 判断
+    RemoteCommand_t stopped = EnabledCommand();
+    stopped.stop_requested = true;
+    assert(RemoteInput_Update(&input, REMOTE_SOURCE_PHONE, &stopped, 100U));
+    assert(!input.phone.armed);
+    assert(RemoteInput_GetLatest(&input, 300U, 200U, &out));
+    ExpectCommand(out, stopped);
+
+    // 超时：离线，输出清零
+    out = EnabledCommand();
+    assert(!RemoteInput_GetLatest(&input, 301U, 200U, &out));
+    ExpectZero(out);
+
+    // 非法参数
+    assert(!RemoteInput_GetLatest(NULL, 100U, 200U, &out));
+    assert(!RemoteInput_GetLatest(&input, 100U, 0U, &out));
+    assert(!RemoteInput_GetLatest(&input, 100U, 200U, NULL));
 }
 
 int main(void)
@@ -204,8 +209,8 @@ int main(void)
     TestSwitchRequiresRearm();
     TestStopRequest();
     TestInvalidFrameCannotArm();
-    TestOperatorDisabled();
+    TestGetLatest();
 
     puts("Remote input tests passed");
     return 0;
-}
+}
