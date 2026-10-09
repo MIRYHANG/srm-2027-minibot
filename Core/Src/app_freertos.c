@@ -35,7 +35,6 @@
 #include "servo.h"
 #include "arm_cycle.h"
 #include "iwdg.h"
-#include "safety.h"
 #include "queue.h"
 #include "task_monitor.h"
 #include "i2c.h"
@@ -43,6 +42,9 @@
 #include "ina226.h"
 #include "ssd1306.h"
 #include "power_display.h"
+#include "robot_cmd.h"
+#include "safety.h"
+#include "safety_input.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -70,11 +72,22 @@
 #define OLED_REFRESH_PERIODS 5U   // 每 5 个周期（约 500 ms）刷新一次
 #define OLED_RETRY_PERIODS   10U  // 初始化失败后每 10 个周期（约 1 s）重试一次
 
+// 急停和驱动故障输入，引脚已在 CubeMX 中配置为上拉输入
+// TODO：按急停电路确认。常闭开关接地时，按下或断线都读到高电平
+#define ESTOP_ACTIVE_LEVEL          GPIO_PIN_SET
+// TODO：按驱动芯片确认。nFAULT 通常为低电平有效的开漏输出
+#define MOTOR_FAULT_ACTIVE_LEVEL    GPIO_PIN_RESET
+
+// 状态灯
+#define LED_ON_LEVEL           GPIO_PIN_SET   // TODO：按 LED 接法确认
+#define LED_OFF_LEVEL          GPIO_PIN_RESET
+#define LED_RUN_TOGGLE_PERIODS 100U // ProtocolTask 5 ms * 100，LED_RUN 每 500 ms 翻转一次
+
 typedef struct
 {
-  RemoteCommand_t command;
-  uint32_t stamp_ms; // 协议任务发布这份安全命令的时间
-} RemotePublished_t;
+  RobotCmdOutput_t output; // 底盘和机械臂命令
+  uint32_t stamp_ms;       // 协议任务发布这份命令的时间
+} RobotPublished_t;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -126,15 +139,17 @@ static MecanumGeometry_t chassis_geometry = {
   .track_width_m = 0.0f,   // TODO：左右轮中心距
 };
 
-// 以下四个状态只由 ProtocolTask 访问
-// 其他任务通过 remote_cmd_queue 获取命令副本
+// 以下状态只由 ProtocolTask 访问
+// 其他任务通过 robot_cmd_queue 获取命令副本
 static srm_parser_t phone_parser;
 static RemoteInput_t remote_input;
-static RemoteCommand_t remote_command;
 static RemotePhoneArm_t phone_arm;
+static RobotCmd_t robot_cmd;
+static SafetyInput_t safety_input;
+static uint32_t led_run_count = 0U;
 
 // 长度为 1，只保存协议任务最近发布的一份完整命令
-static QueueHandle_t remote_cmd_queue = NULL;
+static QueueHandle_t robot_cmd_queue = NULL;
 
 // 以下状态只由 SensorTask 访问；power_reading 可在调试器里直接查看
 static I2cBus_t i2c2_bus;
@@ -177,28 +192,17 @@ static void Chassis_UpdateTargetRpm(float vx_mps, float vy_mps,
                                     float wz_radps);
 static void PhoneRemote_InitAndStart(void);
 static void PhoneRemote_Update(void);
-static void Chassis_UpdateFromRemote(const RemoteCommand_t *command);
+static void Chassis_UpdateFromCmd(const ChassisCmd_t *cmd);
 static void Chassis_Stop(void);
-static bool Remote_GetLatest(RemoteCommand_t *out);
+static bool RobotCmd_GetLatest(RobotCmdOutput_t *out);
+static uint8_t Safety_ReadRaw(void);
+static void StatusLed_Update(const RobotCmdOutput_t *output, uint8_t safety_active);
 static void ArmServos_Start(const uint16_t pulse_us[]);
 static void ArmServos_Apply(const uint16_t pulse_us[]);
 static bool PowerSensor_Start(void);
 static void PowerSensor_Update(void);
 static ResetCause_t ResetCause_FromFlags(uint32_t flags);
 static void Oled_Update(void);
-
-/**
- * @brief 临时把遥控命令转换成机械臂命令，行为和改动前一致
- * @note robot_cmd 接入后删除
- */
-static ArmCmd_t ArmCmd_FromRemote(const RemoteCommand_t *remote)
-{
-  if (remote == NULL || !remote->enabled || remote->stop_requested)
-  {
-    return (ArmCmd_t){0};
-  }
-  return (ArmCmd_t){.enabled = true, .motion = remote->arm};
-}
 
 /* USER CODE END FunctionPrototypes */
 
@@ -276,8 +280,8 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
-  remote_cmd_queue = xQueueCreate(1, sizeof(RemotePublished_t));
-  if (remote_cmd_queue == NULL)
+  robot_cmd_queue = xQueueCreate(1, sizeof(RobotPublished_t));
+  if (robot_cmd_queue == NULL)
   {
     Error_Handler();
   }
@@ -342,10 +346,10 @@ void StartChassisControlTask(void const * argument)
                  (float)configTICK_RATE_HZ;
     last_sample = now;
 
-    RemoteCommand_t command;
-    (void)Remote_GetLatest(&command);
+    RobotCmdOutput_t command;
+    (void)RobotCmd_GetLatest(&command);
 
-    if (!all_alive || !command.enabled || command.stop_requested)
+    if (!all_alive || !command.chassis.enabled)
     {
       Chassis_Stop();
 
@@ -357,7 +361,7 @@ void StartChassisControlTask(void const * argument)
     }
     else
     {
-      Chassis_UpdateFromRemote(&command);
+      Chassis_UpdateFromCmd(&command.chassis);
       ChassisSpeed_Update(dt_s);
     }
   }
@@ -401,12 +405,11 @@ void StartArmTask(void const * argument)
     last_sample = now;
 
     // 命令过期时得到全零命令，enabled 为 false，机械臂当场停住
-    RemoteCommand_t command;
-    (void)Remote_GetLatest(&command);
-    ArmCmd_t arm_cmd = ArmCmd_FromRemote(&command);
+    RobotCmdOutput_t command;
+    (void)RobotCmd_GetLatest(&command);
 
     // 失败时保持上一次的脉宽：不停 PWM，也不输出 0，舵机继续出力
-    if (ArmCycle_Step(&arm_cycle, &arm_cmd, dt_s))
+    if (ArmCycle_Step(&arm_cycle, &command.arm, dt_s))
     {
       ArmServos_Apply(arm_cycle.pulse_us);
     }
@@ -432,21 +435,29 @@ void StartProtocolTask(void const * argument)
 
   // 初始化必须在协议任务的启动宽限内完成
   PhoneRemote_InitAndStart();
+  SafetyInput_Init(&safety_input);
+  RobotCmd_Init(&robot_cmd);
 
   uint32_t last_wake = osKernelSysTick();
 
   for (;;)
   {
-    // 串口异常时，此函数仍会把 remote_command 保持为全零
+    // 接收并解析手机数据，有效帧存进 remote_input
     PhoneRemote_Update();
 
-    RemotePublished_t published = {
-      .command = remote_command,
-      .stamp_ms = HAL_GetTick()
-  };
+    RemoteCommand_t latest;
+    bool online = RemoteInput_GetLatest(&remote_input,HAL_GetTick(),PHONE_TIMEOUT_MS,&latest);
 
+    uint8_t safety_active = SafetyInput_Update(&safety_input,Safety_ReadRaw());
+
+    RobotPublished_t published =
+    {
+      .stamp_ms = HAL_GetTick()
+    };
+    RobotCmd_Update(&robot_cmd, online, &latest, safety_active, &published.output);
+    StatusLed_Update(&published.output, safety_active);
     // 长度为 1 的队列始终覆盖为最新命令，不积累历史命令
-    if (xQueueOverwrite(remote_cmd_queue, &published) != pdPASS)
+    if (xQueueOverwrite(robot_cmd_queue, &published) != pdPASS)
     {
       Error_Handler();
     }
@@ -723,8 +734,6 @@ static void PhoneRemote_InitAndStart(void)
   RemoteInput_Select(&remote_input, REMOTE_SOURCE_PHONE);
   srm_parser_init(&phone_parser);
 
-  remote_command = (RemoteCommand_t){0};
-
   if (!RemoteUart_Init())
   {
     Error_Handler();
@@ -737,14 +746,12 @@ static void PhoneRemote_InitAndStart(void)
 }
 
 /**
- * @brief 处理手机接收数据，更新安全遥控命令
- * @note 只在当前底盘任务中调用，不直接驱动电机
+ * @brief 接收并解析手机数据，有效帧存进 remote_input
+ * @note 只在 ProtocolTask 中调用；能不能动由 RobotCmd 判断
+ * @note 串口异常时清空手机状态，相当于掉线：停止输出，但不改变使能状态
  */
 static void PhoneRemote_Update(void)
 {
-  // 默认禁止运动，只有全部检查通过才给出有效命令
-  remote_command = (RemoteCommand_t){0};
-
   if (RemoteUart_HasFault())
   {
     remote_input.phone = (RemoteState_t){0};
@@ -779,29 +786,26 @@ static void PhoneRemote_Update(void)
     return;
   }
 
-  // 未收到有效帧、超时、未使能或请求停机时，返回零命令
-  remote_command = RemoteInput_GetSafe(&remote_input,
-                                       HAL_GetTick(),
-                                       PHONE_TIMEOUT_MS);
 }
 
 /**
- * @brief 将安全遥控命令换算为底盘速度，再计算四轮目标转速
- * @param command 遥控命令，只读
+ * @brief 将底盘命令换算为底盘速度，再计算四轮目标转速
+ * @param cmd 底盘命令，只读
  * @note 仅更新目标转速，不直接设置电机输出
+ * @note TODO：第 2 步改为按 cmd->gear 限制最大转速
  */
-static void Chassis_UpdateFromRemote(const RemoteCommand_t *command)
+static void Chassis_UpdateFromCmd(const ChassisCmd_t *cmd)
 {
-  if (command == NULL || !command->enabled || command->stop_requested)
+  if (cmd == NULL || !cmd->enabled)
   {
     Chassis_UpdateTargetRpm(0.0f, 0.0f, 0.0f);
     return;
   }
 
   // 遥控量是 -1～1，乘以速度上限得到实际速度
-  float vx_mps = command->forward * CHASSIS_MAX_VX_MPS;
-  float vy_mps = command->left * CHASSIS_MAX_VY_MPS;
-  float wz_radps = command->turn * CHASSIS_MAX_WZ_RADPS;
+  float vx_mps = cmd->forward * CHASSIS_MAX_VX_MPS;
+  float vy_mps = cmd->left * CHASSIS_MAX_VY_MPS;
+  float wz_radps = cmd->turn * CHASSIS_MAX_WZ_RADPS;
 
   // 将底盘速度换算为四个轮子的目标 RPM
   Chassis_UpdateTargetRpm(vx_mps, vy_mps, wz_radps);
@@ -812,19 +816,19 @@ static void Chassis_UpdateFromRemote(const RemoteCommand_t *command)
  * @return 成功且未过期返回 true，否则输出全零并返回 false
  * @note 底盘和机械臂均可调用，两者不会互相消费队列中的命令
  */
-static bool Remote_GetLatest(RemoteCommand_t *out)
+static bool RobotCmd_GetLatest(RobotCmdOutput_t *out)
 {
   if (out == NULL)
   {
     return false;
   }
 
-  *out = (RemoteCommand_t){0};
+  *out = (RobotCmdOutput_t){0};
 
-  RemotePublished_t published;
+  RobotPublished_t published;
 
-  if (remote_cmd_queue == NULL ||
-      xQueuePeek(remote_cmd_queue, &published, 0U) != pdPASS)
+  if (robot_cmd_queue == NULL ||
+      xQueuePeek(robot_cmd_queue, &published, 0U) != pdPASS)
   {
     return false;
   }
@@ -835,7 +839,7 @@ static bool Remote_GetLatest(RemoteCommand_t *out)
     return false;
   }
 
-  *out = published.command;
+  *out = published.output;
   return true;
 }
 
@@ -993,6 +997,57 @@ static void Oled_Update(void)
 
   // 发送失败时驱动把 ready 清零，下个周期重新初始化
   (void)Ssd1306_Flush(&oled);
+}
+
+
+/**
+ * @brief 读取急停和 4 路驱动故障引脚，换算成 SafetyInput 的有效位
+ */
+static uint8_t Safety_ReadRaw(void)
+{
+  uint8_t raw = 0U;
+
+  if (HAL_GPIO_ReadPin(FL_FAULT_GPIO_Port, FL_FAULT_Pin) == MOTOR_FAULT_ACTIVE_LEVEL)
+  {
+    raw |= SAFETY_FAULT_FL;
+  }
+  if (HAL_GPIO_ReadPin(FR_FAULT_GPIO_Port, FR_FAULT_Pin) == MOTOR_FAULT_ACTIVE_LEVEL)
+  {
+    raw |= SAFETY_FAULT_FR;
+  }
+  if (HAL_GPIO_ReadPin(RL_FAULT_GPIO_Port, RL_FAULT_Pin) == MOTOR_FAULT_ACTIVE_LEVEL)
+  {
+    raw |= SAFETY_FAULT_RL;
+  }
+  if (HAL_GPIO_ReadPin(RR_FAULT_GPIO_Port, RR_FAULT_Pin) == MOTOR_FAULT_ACTIVE_LEVEL)
+  {
+    raw |= SAFETY_FAULT_RR;
+  }
+  if (HAL_GPIO_ReadPin(ESTOPN_GPIO_Port, ESTOPN_Pin) == ESTOP_ACTIVE_LEVEL)
+  {
+    raw |= SAFETY_ESTOP;
+  }
+
+  return raw;
+}
+
+/**
+ * @brief 更新 3 个状态灯
+ * @note LED_RUN 闪烁表示调度正常；LED_LINK 亮表示底盘允许运动；LED_FAULT 亮表示急停或驱动故障
+ */
+static void StatusLed_Update(const RobotCmdOutput_t *output, uint8_t safety_active)
+{
+  led_run_count++;
+  if (led_run_count >= LED_RUN_TOGGLE_PERIODS)
+  {
+    led_run_count = 0U;
+    HAL_GPIO_TogglePin(LED_RUN_GPIO_Port, LED_RUN_Pin);
+  }
+
+  HAL_GPIO_WritePin(LED_LINK_GPIO_Port, LED_LINK_Pin,
+                    output->chassis.enabled ? LED_ON_LEVEL : LED_OFF_LEVEL);
+  HAL_GPIO_WritePin(LED_FAULT_GPIO_Port, LED_FAULT_Pin,
+                    safety_active != 0U ? LED_ON_LEVEL : LED_OFF_LEVEL);
 }
 /* USER CODE END Application */
 

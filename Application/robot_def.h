@@ -6,7 +6,7 @@
 #define XIAOSAI_ROBOT_DEF_H
 
 #include <stdbool.h>
-
+#include <stdint.h>
 #include "arm_pose.h"
 
 typedef enum
@@ -38,6 +38,7 @@ typedef struct
     float forward; // 前后，范围 -1～1
     float left;    // 左右，范围 -1～1
     float turn;    // 旋转，范围 -1～1，逆时针为正
+    uint8_t gear;
 } ChassisCmd_t;
 
 #endif //XIAOSAI_ROBOT_DEF_H

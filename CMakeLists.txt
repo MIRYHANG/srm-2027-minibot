@@ -81,6 +81,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Application/safety_input.c
         Application/safety_input.h
         Application/robot_def.h
+        Application/robot_cmd.h
+        Application/robot_cmd.c
 )
 
 # Add STM32CubeMX generated sources

@@ -24,6 +24,8 @@ typedef struct
     float turn;            // 旋转，范围 -1.0f ~ 1.0f
     bool enabled;          // 是否允许输出运动命令
     bool stop_requested;   // 软件停机请求
+    bool arm_stop;
+    bool gear_button;      // 换挡键按住为 true，由 RobotCmd 检测按下的瞬间
     ArmMotionCmd_t arm;    // 机械臂命令，全部为零时表示保持当前位置
 } RemoteCommand_t;
 
