@@ -5,6 +5,10 @@
 #ifndef XIAOSAI_MECANUM_H
 #define XIAOSAI_MECANUM_H
 
+#include <math.h>
+#include <stdbool.h>
+#include <stddef.h>
+
 typedef struct
 {
     float wheel_radius_m;  // 轮半径，米
