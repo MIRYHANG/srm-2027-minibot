@@ -17,6 +17,39 @@ static void ExpectWheels(const MecanumWheelRpm_t *actual,
     assert(fabsf(actual->rr - rr) < tolerance);
 }
 
+/* 归一化混合：只看比例，不需要底盘尺寸 */
+static void TestMixNormalized(void)
+{
+    MecanumWheelRpm_t wheels;
+
+    // 单一方向推满：和 Mecanum_CalculateWheelRpm 的正负号一致
+    assert(Mecanum_MixNormalized(1.0f, 0.0f, 0.0f, &wheels));
+    ExpectWheels(&wheels, 1.0f, 1.0f, 1.0f, 1.0f);
+    assert(Mecanum_MixNormalized(0.0f, 1.0f, 0.0f, &wheels));
+    ExpectWheels(&wheels, -1.0f, 1.0f, 1.0f, -1.0f);
+    assert(Mecanum_MixNormalized(0.0f, 0.0f, 1.0f, &wheels));
+    ExpectWheels(&wheels, -1.0f, 1.0f, -1.0f, 1.0f);
+
+    // 没超过 1：原样输出
+    assert(Mecanum_MixNormalized(0.5f, 0.0f, 0.0f, &wheels));
+    ExpectWheels(&wheels, 0.5f, 0.5f, 0.5f, 0.5f);
+
+    // 前进加左移推满：原始值 (0, 2, 2, 0)，同比例缩到 (0, 1, 1, 0)
+    assert(Mecanum_MixNormalized(1.0f, 1.0f, 0.0f, &wheels));
+    ExpectWheels(&wheels, 0.0f, 1.0f, 1.0f, 0.0f);
+
+    // 三个方向都推满：原始值 (-1, 3, 1, 1)，除以 3
+    assert(Mecanum_MixNormalized(1.0f, 1.0f, 1.0f, &wheels));
+    ExpectWheels(&wheels, -1.0f / 3.0f, 1.0f, 1.0f / 3.0f, 1.0f / 3.0f);
+
+    // 非有限输入：返回 false，输出清零
+    assert(!Mecanum_MixNormalized(NAN, 0.0f, 0.0f, &wheels));
+    ExpectWheels(&wheels, 0.0f, 0.0f, 0.0f, 0.0f);
+    assert(!Mecanum_MixNormalized(0.0f, INFINITY, 0.0f, &wheels));
+    assert(!Mecanum_MixNormalized(0.0f, 0.0f, -INFINITY, &wheels));
+    assert(!Mecanum_MixNormalized(1.0f, 0.0f, 0.0f, NULL));
+}
+
 int main(void)
 {
     MecanumGeometry_t geometry = {
@@ -43,6 +76,7 @@ int main(void)
     Mecanum_CalculateWheelRpm(&geometry, 0.1f, 0.0f, 0.0f, &wheels);
     ExpectWheels(&wheels, 0.0f, 0.0f, 0.0f, 0.0f);
 
+    TestMixNormalized();
     puts("Mecanum tests passed");
     return 0;
 }
