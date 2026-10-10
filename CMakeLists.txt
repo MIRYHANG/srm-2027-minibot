@@ -83,6 +83,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Application/robot_def.h
         Application/robot_cmd.h
         Application/robot_cmd.c
+        Application/chassis_drive.c
+        Application/chassis_drive.h
 )
 
 # Add STM32CubeMX generated sources

@@ -41,19 +41,6 @@ void Mecanum_CalculateWheelRpm(const MecanumGeometry_t *geometry,
     result->rr = (vx_mps - vy_mps + rotation) * mps_to_rpm;
 }
 
-
-/**
- * @brief 按归一化输入做麦轮混合
- * @param forward 前后，-1～1，正数向前
- * @param left 横移，-1～1，正数向左
- * @param turn 旋转，-1～1，正数逆时针
- * @param result 四轮归一化转速，绝对值都不超过 1
- * @return 输入有限且 result 非空返回 true；否则返回 false，result 非空时清零
- * @note 算法结构参考 WPILib：MecanumDrive::DriveCartesianIK 先混合，
- *       MecanumDriveWheelVelocities::Desaturate 再等比例缩小；正负号沿用本工程的公式
- */
-bool Mecanum_MixNormalized(float forward, float left, float turn,
-                           MecanumWheelRpm_t *result);
 bool Mecanum_MixNormalized(float forward, float left, float turn,MecanumWheelRpm_t *result)
 {
     if (result == NULL)

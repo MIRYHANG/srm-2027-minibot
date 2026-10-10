@@ -45,6 +45,7 @@
 #include "robot_cmd.h"
 #include "safety.h"
 #include "safety_input.h"
+#include "chassis_drive.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -133,12 +134,6 @@ static float target_rpm_fr = 0.0f;
 static float target_rpm_rl = 0.0f;
 static float target_rpm_rr = 0.0f;
 
-static MecanumGeometry_t chassis_geometry = {
-  .wheel_radius_m = 0.0f,  // TODO：实测轮半径
-  .wheelbase_m = 0.0f,     // TODO：前后轮中心距
-  .track_width_m = 0.0f,   // TODO：左右轮中心距
-};
-
 // 以下状态只由 ProtocolTask 访问
 // 其他任务通过 robot_cmd_queue 获取命令副本
 static srm_parser_t phone_parser;
@@ -166,11 +161,6 @@ static uint32_t oled_refresh_countdown = 0U;
 static uint32_t oled_retry_countdown = 0U;
 static ResetCause_t reset_cause = RESET_CAUSE_UNKNOWN;
 
-// TODO：后续根据底盘能力和调试结果设置
-// 当前保持为零，暂不产生运动目标
-#define CHASSIS_MAX_VX_MPS   0.0f  // 最大前后速度，m/s
-#define CHASSIS_MAX_VY_MPS   0.0f  // 最大横移速度，m/s
-#define CHASSIS_MAX_WZ_RADPS 0.0f  // 最大旋转角速度，rad/s
 /* USER CODE END Variables */
 osThreadId ChassisControlTHandle;
 osThreadId ArmTaskHandle;
@@ -188,8 +178,6 @@ static void Servo_InitAll(void);
 static void ChassisSpeed_Update(float dt_s);
 static void WheelSpeed_Update(Motor_t *motor, Encoder_t *encoder,
                               PID_Instance *pid, float target_rpm, float dt_s);
-static void Chassis_UpdateTargetRpm(float vx_mps, float vy_mps,
-                                    float wz_radps);
 static void PhoneRemote_InitAndStart(void);
 static void PhoneRemote_Update(void);
 static void Chassis_UpdateFromCmd(const ChassisCmd_t *cmd);
@@ -703,27 +691,6 @@ static void WheelSpeed_Update(Motor_t *motor, Encoder_t *encoder,
 }
 
 /**
- * @brief 根据底盘期望速度计算四个车轮的目标转速
- * @param vx_mps 期望前后速度，正数表示向前，单位为米/秒
- * @param vy_mps 期望左右速度，正数表示向左，单位为米/秒
- * @param wz_radps 期望旋转角速度，正数表示逆时针，单位为弧度/秒
- * @note 计算结果只写入四轮目标 RPM，不直接驱动电机；底盘尺寸无效时目标转速为零
- */
-static void Chassis_UpdateTargetRpm(float vx_mps, float vy_mps,
-                                    float wz_radps)
-{
-  MecanumWheelRpm_t wheels;
-
-  Mecanum_CalculateWheelRpm(&chassis_geometry,
-                            vx_mps, vy_mps, wz_radps, &wheels);
-
-  target_rpm_fl = wheels.fl;
-  target_rpm_fr = wheels.fr;
-  target_rpm_rl = wheels.rl;
-  target_rpm_rr = wheels.rr;
-}
-
-/**
  * @brief 初始化手机遥控状态、解析器和接收队列，并启动接收
  * @note 在任务启动阶段调用一次
  */
@@ -789,28 +756,23 @@ static void PhoneRemote_Update(void)
 }
 
 /**
- * @brief 将底盘命令换算为底盘速度，再计算四轮目标转速
+ * @brief 按当前挡位把底盘命令换算成四轮目标转速
  * @param cmd 底盘命令，只读
  * @note 仅更新目标转速，不直接设置电机输出
- * @note TODO：第 2 步改为按 cmd->gear 限制最大转速
+ * @note 推满摇杆时最快那个轮子等于挡位转速；未使能或命令非法时目标转速为零
  */
 static void Chassis_UpdateFromCmd(const ChassisCmd_t *cmd)
 {
-  if (cmd == NULL || !cmd->enabled)
-  {
-    Chassis_UpdateTargetRpm(0.0f, 0.0f, 0.0f);
-    return;
-  }
+  MecanumWheelRpm_t wheels;
 
-  // 遥控量是 -1～1，乘以速度上限得到实际速度
-  float vx_mps = cmd->forward * CHASSIS_MAX_VX_MPS;
-  float vy_mps = cmd->left * CHASSIS_MAX_VY_MPS;
-  float wz_radps = cmd->turn * CHASSIS_MAX_WZ_RADPS;
+  // 返回 false 时 wheels 已经清零，直接写入即可停车
+  (void)ChassisDrive_ToWheelRpm(cmd, &wheels);
 
-  // 将底盘速度换算为四个轮子的目标 RPM
-  Chassis_UpdateTargetRpm(vx_mps, vy_mps, wz_radps);
+  target_rpm_fl = wheels.fl;
+  target_rpm_fr = wheels.fr;
+  target_rpm_rl = wheels.rl;
+  target_rpm_rr = wheels.rr;
 }
-
 /**
  * @brief 读取最近发布的安全命令，不从队列中取走数据
  * @return 成功且未过期返回 true，否则输出全零并返回 false

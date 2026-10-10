@@ -48,7 +48,7 @@ bool ChassisDrive_ToWheelRpm(const ChassisCmd_t *cmd, MecanumWheelRpm_t *out)
 
     float max_rpm = ChassisDrive_GearMaxRpm(cmd->gear);
 
-    if (max_rpm < 0.0f || !AxisValid(cmd->forward) || !AxisValid(cmd->left) || !AxisValid(cmd->turn))
+    if (max_rpm <= 0.0f || !AxisValid(cmd->forward) || !AxisValid(cmd->left) || !AxisValid(cmd->turn))
     {
         return false;
     }
