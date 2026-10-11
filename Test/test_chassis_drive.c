@@ -13,6 +13,9 @@
 
 #define TOLERANCE 0.0001f
 
+#define RAMP_DT_S 0.1f
+
+
 static void AssertNear(float actual, float expected)
 {
     assert(fabsf(actual - expected) < TOLERANCE);
@@ -157,6 +160,109 @@ static void TestDisabledAndInvalid(void)
     assert(!ChassisDrive_ToWheelRpm(&cmd, NULL));
 }
 
+static MecanumWheelRpm_t Wheels(float fl, float fr, float rl, float rr)
+{
+    return (MecanumWheelRpm_t){.fl = fl, .fr = fr, .rl = rl, .rr = rr};
+}
+
+static void TestRampAccelAndDecel(void)
+{
+    const float step = CHASSIS_WHEEL_RPM_PER_S * RAMP_DT_S;
+    const float goal = 5.5f * step; // 不是整数步，检查最后一步刚好到达、不冲过头
+    ChassisRamp_t ramp;
+    MecanumWheelRpm_t out;
+    MecanumWheelRpm_t target = Wheels(goal, goal, goal, goal);
+
+    ChassisRamp_Reset(&ramp);
+
+    // 加速：每步只增加 step
+    for (int count = 1; count <= 5; count++)
+    {
+        assert(ChassisRamp_Step(&ramp, &target, RAMP_DT_S, &out));
+        float expected = (float)count * step;
+        AssertWheels(&out, expected, expected, expected, expected);
+    }
+
+    // 剩下半步：直接到达目标，之后保持不动
+    assert(ChassisRamp_Step(&ramp, &target, RAMP_DT_S, &out));
+    AssertWheels(&out, goal, goal, goal, goal);
+    assert(ChassisRamp_Step(&ramp, &target, RAMP_DT_S, &out));
+    AssertWheels(&out, goal, goal, goal, goal);
+
+    // 松开摇杆：减速同样受限制，不会一下停住
+    MecanumWheelRpm_t zero = Wheels(0.0f, 0.0f, 0.0f, 0.0f);
+    assert(ChassisRamp_Step(&ramp, &zero, RAMP_DT_S, &out));
+    float slowed = goal - step;
+    AssertWheels(&out, slowed, slowed, slowed, slowed);
+}
+
+static void TestRampKeepsDirection(void)
+{
+    const float step = CHASSIS_WHEEL_RPM_PER_S * RAMP_DT_S;
+    ChassisRamp_t ramp;
+    MecanumWheelRpm_t out;
+
+    // 斜着推满：(0, 30, 30, 0) 的比例在过渡过程中保持不变
+    ChassisRamp_Reset(&ramp);
+    MecanumWheelRpm_t target = Wheels(0.0f, 30.0f, 30.0f, 0.0f);
+    assert(ChassisRamp_Step(&ramp, &target, RAMP_DT_S, &out));
+    AssertWheels(&out, 0.0f, step, step, 0.0f);
+
+    // 变化量不同的四个轮子：变化最大的走满一步，其他按比例走
+    ChassisRamp_Reset(&ramp);
+    target = Wheels(-10.0f * step, 20.0f * step, 5.0f * step, 0.0f);
+    assert(ChassisRamp_Step(&ramp, &target, RAMP_DT_S, &out));
+    AssertWheels(&out, -0.5f * step, step, 0.25f * step, 0.0f);
+}
+
+static void TestRampSmallChangeAndAlias(void)
+{
+    const float step = CHASSIS_WHEEL_RPM_PER_S * RAMP_DT_S;
+    ChassisRamp_t ramp;
+    ChassisRamp_Reset(&ramp);
+
+    // 变化量小于一步：直接到达；out 和 target 可以是同一个对象
+    MecanumWheelRpm_t wheels = Wheels(0.5f * step, -0.5f * step, 0.25f * step, 0.0f);
+    assert(ChassisRamp_Step(&ramp, &wheels, RAMP_DT_S, &wheels));
+    AssertWheels(&wheels, 0.5f * step, -0.5f * step, 0.25f * step, 0.0f);
+}
+
+static void TestRampInvalid(void)
+{
+    const float step = CHASSIS_WHEEL_RPM_PER_S * RAMP_DT_S;
+    ChassisRamp_t ramp;
+    MecanumWheelRpm_t out;
+    MecanumWheelRpm_t target = Wheels(10.0f * step, 10.0f * step, 10.0f * step, 10.0f * step);
+
+    ChassisRamp_Reset(&ramp);
+    assert(ChassisRamp_Step(&ramp, &target, RAMP_DT_S, &out));
+
+    // 非法参数：返回 false，输出上一次的转速，ramp 不变
+    ChassisRamp_t saved = ramp;
+    static const float bad_dt[] = {0.0f, -0.1f, NAN, INFINITY};
+    for (size_t idx = 0U; idx < sizeof(bad_dt) / sizeof(bad_dt[0]); idx++)
+    {
+        memset(&out, 0xA5, sizeof(out));
+        assert(!ChassisRamp_Step(&ramp, &target, bad_dt[idx], &out));
+        AssertWheels(&out, step, step, step, step);
+        assert(memcmp(&ramp, &saved, sizeof(ramp)) == 0);
+    }
+
+    MecanumWheelRpm_t bad_target = Wheels(NAN, 0.0f, 0.0f, 0.0f);
+    assert(!ChassisRamp_Step(&ramp, &bad_target, RAMP_DT_S, &out));
+    AssertWheels(&out, step, step, step, step);
+    assert(!ChassisRamp_Step(&ramp, NULL, RAMP_DT_S, &out));
+    assert(!ChassisRamp_Step(&ramp, &target, RAMP_DT_S, NULL));
+    assert(!ChassisRamp_Step(NULL, &target, RAMP_DT_S, &out));
+    assert(memcmp(&ramp, &saved, sizeof(ramp)) == 0);
+
+    // 急停后清零：下一次从 0 开始加速
+    ChassisRamp_Reset(&ramp);
+    assert(ChassisRamp_Step(&ramp, &target, RAMP_DT_S, &out));
+    AssertWheels(&out, step, step, step, step);
+    ChassisRamp_Reset(NULL);
+}
+
 int main(void)
 {
     TestGearTable();
@@ -164,6 +270,10 @@ int main(void)
     TestDirections();
     TestNeverExceedsGear();
     TestDisabledAndInvalid();
+    TestRampAccelAndDecel();
+    TestRampKeepsDirection();
+    TestRampSmallChangeAndAlias();
+    TestRampInvalid();
 
     puts("Chassis drive tests passed");
     return 0;
