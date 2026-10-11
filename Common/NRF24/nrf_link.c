@@ -46,8 +46,42 @@ bool NrfLink_Configure(uint8_t mode)
     return !NRF24_Port_HasFault();
 }
 
-NrfTxResult_t NrfLink_Send(uint8_t *buf, uint8_t len)
+/**
+ * @brief 读空接收 FIFO，只保留最后一包应答载荷
+ */
+static void DrainAckPayloads(uint8_t *ack, uint8_t *ack_len)
 {
+    if (ack == NULL || ack_len == NULL)
+    {
+        nRF24_FlushRX();
+        return;
+    }
+
+    // FIFO 最多 3 包，限制循环次数，SPI 异常时也不会卡在这里
+    for (uint8_t count = 0U; count < NRF_LINK_RX_FIFO_DEPTH; count++)
+    {
+        if (nRF24_GetStatus_RXFIFO() == nRF24_STATUS_RXFIFO_EMPTY)
+        {
+            return;
+        }
+
+        uint8_t len = 0U;
+        if (nRF24_ReadPayloadDpl(ack, &len) == nRF24_RX_EMPTY || NRF24_Port_HasFault())
+        {
+            *ack_len = 0U;
+            return;
+        }
+        *ack_len = len;
+    }
+}
+
+NrfTxResult_t NrfLink_Send(uint8_t *buf, uint8_t len, uint8_t *ack, uint8_t *ack_len)
+{
+    if (ack_len != NULL)
+    {
+        *ack_len = 0U;
+    }
+
     if (buf == NULL || len == 0U || len > NRF_LINK_MAX_PAYLOAD)
     {
         return NRF_TX_TIMEOUT;
@@ -64,6 +98,8 @@ NrfTxResult_t NrfLink_Send(uint8_t *buf, uint8_t len)
              (uint32_t)(HAL_GetTick() - start) < NRF_LINK_TX_TIMEOUT_MS);
 
     nRF24_ClearIRQFlags();
+    DrainAckPayloads(ack, ack_len);
+
     if ((flags & nRF24_FLAG_TX_DS) != 0U)
     {
         return NRF_TX_OK;
@@ -90,4 +126,21 @@ bool NrfLink_Receive(uint8_t *buf, uint8_t *len)
     nRF24_RXResult pipe = nRF24_ReadPayloadDpl(buf, len);
     nRF24_ClearIRQFlags();
     return pipe != nRF24_RX_EMPTY && *len > 0U;
+}
+
+bool NrfLink_QueueAck(const uint8_t *buf, uint8_t len)
+{
+    if (buf == NULL || len == 0U || len > NRF_LINK_MAX_PAYLOAD)
+    {
+        return false;
+    }
+
+    if (nRF24_GetStatus_TXFIFO() != nRF24_STATUS_TXFIFO_EMPTY)
+    {
+        return false;
+    }
+
+    // 驱动的接口参数是 char *，但不会修改数据
+    nRF24_WriteAckPayload(nRF24_RX_PIPE0, (char *)buf, len);
+    return true;
 }

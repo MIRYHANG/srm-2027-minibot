@@ -91,6 +91,10 @@ add_executable(${CMAKE_PROJECT_NAME}
         Common/NRF24/NRF24_port.h
         Common/NRF24/nrf_link.c
         Common/NRF24/nrf_link.h
+        Common/Protocol/handheld_packet.c
+        Common/Protocol/handheld_packet.h
+        Application/remote_handheld.c
+        Application/remote_handheld.h
 )
 
 # Add STM32CubeMX generated sources
@@ -113,6 +117,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/Application
         ${CMAKE_CURRENT_SOURCE_DIR}/Protocol
         ${CMAKE_CURRENT_SOURCE_DIR}/Common/NRF24
+        ${CMAKE_CURRENT_SOURCE_DIR}/Common/Protocol
     # Add user defined include paths
 )
 

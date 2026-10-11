@@ -48,6 +48,8 @@
 #include "chassis_drive.h"
 #include "NRF24.h"
 #include "nrf_link.h"
+#include "handheld_packet.h"
+#include "remote_handheld.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,8 +59,12 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+// 当前使用的遥控来源；改成 REMOTE_SOURCE_HANDHELD 即使用自制手柄
+#define REMOTE_ACTIVE_SOURCE REMOTE_SOURCE_PHONE
+
 // 暂定超时阈值，后续根据实际发送周期确认
 #define PHONE_TIMEOUT_MS 200U
+#define HANDHELD_TIMEOUT_MS 100U // 手柄每 10 ms 发一包，连续丢约 10 包判定掉线
 
 // 限制每周期处理字节数，避免协议任务长时间占用 CPU
 #define PHONE_RX_BUDGET 64U
@@ -154,8 +160,8 @@ static bool radio_ready;
 static uint32_t radio_last_try_ms;
 
 // 手柄链路测试用，在调试器 Live Watch 里观察
-volatile uint32_t radio_rx_count;
-volatile uint8_t radio_rx_last;
+volatile uint32_t radio_rx_count;  // 收到的全部载荷
+volatile uint32_t radio_bad_count; // 其中校验失败的载荷
 
 // 长度为 1，只保存协议任务最近发布的一份完整命令
 static QueueHandle_t robot_cmd_queue = NULL;
@@ -195,6 +201,8 @@ static void WheelSpeed_Update(Motor_t *motor, Encoder_t *encoder,
 static void PhoneRemote_InitAndStart(void);
 static void PhoneRemote_Update(void);
 static void HandheldRadio_Update(void);
+static void HandheldRadio_PublishStatus(const RobotCmd_t *robot, uint8_t safety_active);
+static uint32_t RemoteTimeoutMs(RemoteSource_t source);
 static void Chassis_UpdateFromCmd(const ChassisCmd_t *cmd, float dt_s);
 static void Chassis_Stop(void);
 static bool RobotCmd_GetLatest(RobotCmdOutput_t *out);
@@ -450,7 +458,8 @@ void StartProtocolTask(void const * argument)
     HandheldRadio_Update();
 
     RemoteCommand_t latest;
-    bool online = RemoteInput_GetLatest(&remote_input,HAL_GetTick(),PHONE_TIMEOUT_MS,&latest);
+    bool online = RemoteInput_GetLatest(&remote_input, HAL_GetTick(),
+                                        RemoteTimeoutMs(remote_input.selected), &latest);
 
     uint8_t safety_active = SafetyInput_Update(&safety_input,Safety_ReadRaw());
 
@@ -460,6 +469,8 @@ void StartProtocolTask(void const * argument)
     };
     RobotCmd_Update(&robot_cmd, online, &latest, safety_active, &published.output);
     StatusLed_Update(&published.output, safety_active);
+    HandheldRadio_PublishStatus(&robot_cmd, safety_active);
+    
     // 长度为 1 的队列始终覆盖为最新命令，不积累历史命令
     if (xQueueOverwrite(robot_cmd_queue, &published) != pdPASS)
     {
@@ -716,7 +727,7 @@ static void PhoneRemote_InitAndStart(void)
 {
   RemoteInput_Init(&remote_input);
   RemotePhoneArm_Init(&phone_arm); // selected = ARM_J1，也就是 0
-  RemoteInput_Select(&remote_input, REMOTE_SOURCE_PHONE);
+  RemoteInput_Select(&remote_input, REMOTE_ACTIVE_SOURCE);
   srm_parser_init(&phone_parser);
 
   if (!RemoteUart_Init())
@@ -1035,9 +1046,18 @@ static void StatusLed_Update(const RobotCmdOutput_t *output, uint8_t safety_acti
 }
 
 /**
- * @brief 手柄无线接收，链路测试版本：只统计收包数量
+ * @brief 当前遥控来源允许的最长无有效帧时间
+ */
+static uint32_t RemoteTimeoutMs(RemoteSource_t source)
+{
+  return source == REMOTE_SOURCE_HANDHELD ? HANDHELD_TIMEOUT_MS : PHONE_TIMEOUT_MS;
+}
+
+/**
+ * @brief 接收手柄数据，有效包存进 remote_input.handheld
  * @note 只在 ProtocolTask 中调用；不阻塞，配置失败后每 100 ms 重试一次
  * @note 协议任务 30 ms 内必须打心跳，所以不能在这里 osDelay 等模块上电
+ * @note 模块异常时清空手柄状态，相当于掉线：停止输出，但不改变使能状态
  */
 static void HandheldRadio_Update(void)
 {
@@ -1064,13 +1084,43 @@ static void HandheldRadio_Update(void)
       break;
     }
     radio_rx_count++;
-    radio_rx_last = buf[0];
+
+    // 使用读出这一包的时间；每周期都会读空 FIFO，误差不超过一个任务周期
+    if (!RemoteHandheld_ProcessPayload(&remote_input, buf, len, HAL_GetTick()))
+    {
+      radio_bad_count++;
+    }
   }
 
-  // SPI 出错时下一周期重新配置
+  // SPI 出错时丢弃手柄状态，下一周期重新配置模块
   if (NRF24_Port_HasFault())
   {
+    remote_input.handheld = (RemoteState_t){0};
     radio_ready = false;
+  }
+}
+
+/**
+ * @brief 把小车状态预装成 ACK 载荷，手柄下次发包时随应答带回
+ * @note 在 RobotCmd_Update 之后调用，回传的是本周期的使能和挡位
+ */
+static void HandheldRadio_PublishStatus(const RobotCmd_t *robot, uint8_t safety_active)
+{
+  if (!radio_ready)
+  {
+    return;
+  }
+
+  HhStatus_t status = {
+    .flags = (uint8_t)((robot->enabled ? HH_STATUS_ENABLED : 0U) |
+                       (safety_active != 0U ? HH_STATUS_SAFETY : 0U)),
+    .gear = robot->gear
+  };
+
+  uint8_t buf[HH_STATUS_LEN];
+  if (HhStatus_Encode(&status, buf, sizeof(buf)) == HH_STATUS_LEN)
+  {
+    (void)NrfLink_QueueAck(buf, (uint8_t)sizeof(buf));
   }
 }
 /* USER CODE END Application */

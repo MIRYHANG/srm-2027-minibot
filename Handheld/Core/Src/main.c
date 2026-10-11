@@ -122,7 +122,7 @@ int main(void)
       uint8_t buf[1] = {counter};
       counter++;
 
-      switch (NrfLink_Send(buf, (uint8_t)sizeof(buf)))
+      switch (NrfLink_Send(buf, (uint8_t)sizeof(buf), NULL, NULL))
       {
         case NRF_TX_OK:
           tx_ok_count++;
