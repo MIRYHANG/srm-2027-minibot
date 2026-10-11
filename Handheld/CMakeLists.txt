@@ -38,7 +38,9 @@ set(COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../Common)
 add_executable(${CMAKE_PROJECT_NAME}
         ${COMMON_DIR}/NRF24/NRF24.c
         ${COMMON_DIR}/NRF24/NRF24_port.c
-        ${COMMON_DIR}/NRF24/nrf_link.c)
+        ${COMMON_DIR}/NRF24/nrf_link.c
+        ${COMMON_DIR}/Protocol/handheld_packet.c
+        Application/hh_logic.c)
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
@@ -56,6 +58,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         ${COMMON_DIR}/NRF24
+        ${COMMON_DIR}/Protocol
+        ${CMAKE_CURRENT_SOURCE_DIR}/Application
     # Add user defined include paths
 )
 
