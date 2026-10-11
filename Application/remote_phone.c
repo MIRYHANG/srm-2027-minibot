@@ -122,9 +122,22 @@ bool RemotePhone_Convert(const srm_control_state_t *raw,
     {
         next.arm.preset = ARM_PRESET_STOW;
     }
+    
+    bool x = (raw->buttons & PHONE_BUTTON_X) != 0U;
+    bool y = (raw->buttons & PHONE_BUTTON_Y) != 0U;
 
-    next.arm.gripper_close = (raw->buttons & PHONE_BUTTON_X) != 0U;
-    next.arm.gripper_open = (raw->buttons & PHONE_BUTTON_Y) != 0U;
+    if (x && !y)
+    {
+        next.arm.jog[ARM_GRIPPER] = 1.0f;
+    }
+    else if (y && !x)
+    {
+        next.arm.jog[ARM_GRIPPER] = -1.0f;
+    }
+    else if (x && y)
+    {
+        next.arm.jog[ARM_GRIPPER] = 0.0f;
+    }
 
     next.enabled = (raw->switches & PHONE_ENABLE_MASK) != 0U;
     next.stop_requested = (raw->switches & PHONE_STOP_MASK) != 0U;

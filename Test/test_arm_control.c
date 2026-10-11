@@ -136,7 +136,8 @@ static void TestJogStep(void)
 {
     static const float jogs[] = {1.0f, -1.0f, 0.5f, -0.5f};
 
-    for (int joint = 0; joint < ARM_GRIPPER; joint++)
+    // 夹爪和关节一样点动
+    for (int joint = 0; joint < ARM_JOINT_COUNT; joint++)
     {
         for (size_t j = 0; j < sizeof(jogs) / sizeof(jogs[0]); j++)
         {
@@ -165,7 +166,7 @@ static void TestJogStep(void)
 
 static void TestJogClampedAtLimits(void)
 {
-    for (int joint = 0; joint < ARM_GRIPPER; joint++)
+    for (int joint = 0; joint < ARM_JOINT_COUNT; joint++)
     {
         const ArmJointCalib_t *calib = ArmCalib_Get(joint);
         assert(calib != NULL);
@@ -244,54 +245,68 @@ static void TestPresetBehaviour(void)
 
 static void TestPresetKeepsGripper(void)
 {
+    ArmPose_t ready;
+    assert(ArmControl_GetPreset(ARM_PRESET_GRAB_READY, &ready));
+
+    // 夹爪已经夹紧
     ArmPose_t current = PoseAt(0.5f);
+    current.joint[ARM_GRIPPER] = ARM_GRIPPER_CLOSED;
     ArmControl_t control = ControlAt(&current);
     ArmMotionCmd_t cmd = {0};
 
-    cmd.gripper_close = true;
-    assert(ArmControl_Update(&control, &current, &cmd, DT_S));
-    assert(control.target.joint[ARM_GRIPPER] == ARM_GRIPPER_CLOSED);
-
     // 切换预设时不能松开已经夹住的东西
-    cmd.gripper_close = false;
     cmd.preset = ARM_PRESET_GRAB_READY;
     assert(ArmControl_Update(&control, &current, &cmd, DT_S));
     assert(control.target.joint[ARM_GRIPPER] == ARM_GRIPPER_CLOSED);
 
-    // 预设帧里的夹爪请求照常生效
-    cmd.gripper_open = true;
+    // 预设帧里按住松开：夹爪照常点动，关节仍然跟随预设
+    cmd.jog[ARM_GRIPPER] = -1.0f;
     assert(ArmControl_Update(&control, &current, &cmd, DT_S));
-    assert(control.target.joint[ARM_GRIPPER] == ARM_GRIPPER_OPEN);
+    AssertNear(control.target.joint[ARM_GRIPPER],
+               ARM_GRIPPER_CLOSED - MaxStep(ARM_GRIPPER));
+    for (int idx = 0; idx < ARM_GRIPPER; idx++)
+    {
+        assert(control.target.joint[idx] == ready.joint[idx]);
+    }
 }
 
-static void TestGripper(void)
+static void TestGripperJog(void)
 {
+    const ArmJointCalib_t *gripper = ArmCalib_Get(ARM_GRIPPER);
+    assert(gripper != NULL);
+
+    // 夹爪比关节慢：从张开到夹紧至少要 1 s，方便找到刚好夹住的位置
+    assert((gripper->max_val - gripper->min_val) / gripper->max_speed_per_s >= 1.0f);
+
     ArmPose_t current = PoseAt(0.5f);
     ArmControl_t control = ControlAt(&current);
-    float initial = control.target.joint[ARM_GRIPPER];
     ArmMotionCmd_t cmd = {0};
 
-    // jog[ARM_GRIPPER] 不影响夹爪
+    // 按住夹紧、按住松开：以当前位置为基准走一步
     cmd.jog[ARM_GRIPPER] = 1.0f;
     assert(ArmControl_Update(&control, &current, &cmd, DT_S));
-    assert(control.target.joint[ARM_GRIPPER] == initial);
+    AssertNear(control.target.joint[ARM_GRIPPER],
+               current.joint[ARM_GRIPPER] + MaxStep(ARM_GRIPPER));
+
+    cmd.jog[ARM_GRIPPER] = -1.0f;
+    assert(ArmControl_Update(&control, &current, &cmd, DT_S));
+    AssertNear(control.target.joint[ARM_GRIPPER],
+               current.joint[ARM_GRIPPER] - MaxStep(ARM_GRIPPER));
+
+    // 松手：目标不再变化
+    ArmControl_t saved = control;
     cmd.jog[ARM_GRIPPER] = 0.0f;
+    assert(ArmControl_Update(&control, &current, &cmd, DT_S));
+    AssertPoseEqual(&control.target, &saved.target);
 
-    cmd.gripper_close = true;
+    // 到头被裁剪：夹紧时继续按夹紧、张开时继续按松开都不越界
+    current.joint[ARM_GRIPPER] = ARM_GRIPPER_CLOSED;
+    cmd.jog[ARM_GRIPPER] = 1.0f;
     assert(ArmControl_Update(&control, &current, &cmd, DT_S));
     assert(control.target.joint[ARM_GRIPPER] == ARM_GRIPPER_CLOSED);
 
-    // 两个都按：保持夹紧
-    cmd.gripper_open = true;
-    assert(ArmControl_Update(&control, &current, &cmd, DT_S));
-    assert(control.target.joint[ARM_GRIPPER] == ARM_GRIPPER_CLOSED);
-
-    cmd.gripper_close = false;
-    assert(ArmControl_Update(&control, &current, &cmd, DT_S));
-    assert(control.target.joint[ARM_GRIPPER] == ARM_GRIPPER_OPEN);
-
-    // 两个都不按：保持张开
-    cmd.gripper_open = false;
+    current.joint[ARM_GRIPPER] = ARM_GRIPPER_OPEN;
+    cmd.jog[ARM_GRIPPER] = -1.0f;
     assert(ArmControl_Update(&control, &current, &cmd, DT_S));
     assert(control.target.joint[ARM_GRIPPER] == ARM_GRIPPER_OPEN);
 }
@@ -420,7 +435,7 @@ int main(void)
     TestJogUsesCurrentAndReleaseHolds();
     TestPresetBehaviour();
     TestPresetKeepsGripper();
-    TestGripper();
+    TestGripperJog();
     TestZeroCommandHolds();
     TestInvalidInputs();
 

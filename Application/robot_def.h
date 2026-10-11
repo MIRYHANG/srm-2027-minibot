@@ -20,8 +20,6 @@ typedef struct
 {
     float jog[ARM_JOINT_COUNT]; // 各关节运动方向和速度比例，范围 -1～1，零表示保持
     ArmPreset_t preset;
-    bool gripper_close;
-    bool gripper_open;
 } ArmMotionCmd_t;
 
 /*-------robot_cmd 发给机械臂任务的命令--------*/

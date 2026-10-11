@@ -54,7 +54,7 @@ bool ArmControl_GetPreset(ArmPreset_t preset, ArmPose_t *out);
  * @param cmd 机械臂遥控命令，各字段为电平语义，全零表示保持
  * @param dt_s 本次更新的时间间隔，单位为秒
  * @return 成功返回 true；输入非法或结果越界返回 false，且不修改 control
- * @note 预设只改 J1～J5，夹爪只由 gripper_close / gripper_open 控制
+ * @note 预设只改 J1～J5
  * @note 这里只更新目标，不驱动舵机
  */
 bool ArmControl_Update(ArmControl_t *control, const ArmPose_t *current,

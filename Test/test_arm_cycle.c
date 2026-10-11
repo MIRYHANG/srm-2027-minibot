@@ -225,12 +225,15 @@ static void TestGripperSpeedLimited(void)
 
     float start = cycle.current.joint[ARM_GRIPPER];
 
-    cmd.motion.gripper_close = true;
+    cmd.motion.jog[ARM_GRIPPER] = 1.0f;
     assert(ArmCycle_Step(&cycle, &cmd, DT_S));
     AssertNear(cycle.current.joint[ARM_GRIPPER],
                start + gripper->max_speed_per_s * DT_S);
 
-    for (int count = 0; count < 100; count++)
+    // 按住足够长的时间：从张开走到夹紧，并停在夹紧位置
+    int steps = (int)((gripper->max_val - gripper->min_val) /
+                      (gripper->max_speed_per_s * DT_S)) + 2;
+    for (int count = 0; count < steps; count++)
     {
         assert(ArmCycle_Step(&cycle, &cmd, DT_S));
     }

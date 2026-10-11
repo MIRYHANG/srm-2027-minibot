@@ -177,51 +177,43 @@ static bool ApplyPreset(ArmPreset_t preset, ArmPose_t *target)
 }
 
 /**
- * @brief 对 jog 不为零的 J1～J5，以当前位姿为基准计算新目标
- * @note jog 为零的关节保持原目标，所以松手后预设动作会继续执行完
+ * @brief 点动一个关节：jog 不为零时，以当前位姿为基准计算新目标
+ * @note jog 为零时保持原目标，所以松手后预设动作会继续执行完
+ */
+static bool JogJoint(const ArmPose_t *current, int idx, float jog,
+                     float dt_s, ArmPose_t *target)
+{
+    if (jog == 0.0f)
+    {
+        return true;
+    }
+
+    const ArmJointCalib_t *calib = ArmCalib_Get(idx);
+    if (calib == NULL)
+    {
+        return false;
+    }
+
+    float raw = current->joint[idx] + jog * calib->max_speed_per_s * dt_s;
+
+    return ArmCalib_Clamp(idx, raw, &target->joint[idx]);
+}
+
+/**
+ * @brief 点动 J1～J5，夹爪另外处理
  */
 static bool ApplyJog(const ArmPose_t *current, const float jog[],
                      float dt_s, ArmPose_t *target)
 {
     for (int idx = 0; idx < ARM_GRIPPER; idx++)
     {
-        if (jog[idx] == 0.0f)
-        {
-            continue;
-        }
-
-        const ArmJointCalib_t *calib = ArmCalib_Get(idx);
-        if (calib == NULL)
-        {
-            return false;
-        }
-
-        // 基准用 current 而不是旧目标，松手后目标就停在当前位置
-        float raw = current->joint[idx] +
-                    jog[idx] * calib->max_speed_per_s * dt_s;
-
-        if (!ArmCalib_Clamp(idx, raw, &target->joint[idx]))
+        if (!JogJoint(current, idx, jog[idx], dt_s, target))
         {
             return false;
         }
     }
 
     return true;
-}
-
-/**
- * @brief 按夹紧 / 松开请求更新夹爪目标，jog[ARM_GRIPPER] 一律忽略
- * @note 两个都按或都不按时保持不变
- */
-static void ApplyGripper(const ArmMotionCmd_t *cmd, ArmPose_t *target)
-{
-    if (cmd->gripper_close == cmd->gripper_open)
-    {
-        return;
-    }
-
-    target->joint[ARM_GRIPPER] = cmd->gripper_close ? ARM_GRIPPER_CLOSED
-                                                    : ARM_GRIPPER_OPEN;
 }
 
 bool ArmControl_Update(ArmControl_t *control, const ArmPose_t *current,
@@ -253,7 +245,10 @@ bool ArmControl_Update(ArmControl_t *control, const ArmPose_t *current,
         return false;
     }
 
-    ApplyGripper(cmd, &next.target);
+    if (!JogJoint(current, ARM_GRIPPER, cmd->jog[ARM_GRIPPER], dt_s, &next.target))
+    {
+        return false;
+    }
 
     if (!ArmPose_IsValid(&next.target))
     {

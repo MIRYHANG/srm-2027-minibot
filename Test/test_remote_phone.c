@@ -23,8 +23,6 @@ static void ExpectCommand(RemoteCommand_t actual,
     }
 
     assert(actual.arm.preset == expected.arm.preset);
-    assert(actual.arm.gripper_close == expected.arm.gripper_close);
-    assert(actual.arm.gripper_open == expected.arm.gripper_open);
 }
 
 static void ExpectZero(RemoteCommand_t command)
@@ -43,9 +41,7 @@ static RemoteCommand_t NonzeroCommand(void)
         .enabled = true,
         .stop_requested = true,
         .arm = {
-            .preset = ARM_PRESET_STOW,
-            .gripper_close = true,
-            .gripper_open = true
+            .preset = ARM_PRESET_STOW
         }
     };
 
@@ -199,16 +195,15 @@ static void TestButtonMapping(void)
     {
         uint8_t buttons;
         ArmPreset_t preset;
-        bool close;
-        bool open;
+        float gripper_jog; // X 按住夹紧为 1，Y 按住松开为 -1
     } cases[] = {
-        {0x01U, ARM_PRESET_GRAB_READY, false, false},
-        {0x02U, ARM_PRESET_STOW,       false, false},
-        {0x03U, ARM_PRESET_NONE,       false, false},
-        {0x04U, ARM_PRESET_NONE,       true,  false},
-        {0x08U, ARM_PRESET_NONE,       false, true },
-        {0x0CU, ARM_PRESET_NONE,       true,  true },
-        {0x00U, ARM_PRESET_NONE,       false, false}
+        {0x01U, ARM_PRESET_GRAB_READY,  0.0f},
+        {0x02U, ARM_PRESET_STOW,        0.0f},
+        {0x03U, ARM_PRESET_NONE,        0.0f},
+        {0x04U, ARM_PRESET_NONE,        1.0f},
+        {0x08U, ARM_PRESET_NONE,       -1.0f},
+        {0x0CU, ARM_PRESET_NONE,        0.0f},
+        {0x00U, ARM_PRESET_NONE,        0.0f}
     };
 
     RemotePhoneArm_t arm;
@@ -226,11 +221,35 @@ static void TestButtonMapping(void)
 
         RemoteCommand_t expected = {0};
         expected.arm.preset = cases[idx].preset;
-        expected.arm.gripper_close = cases[idx].close;
-        expected.arm.gripper_open = cases[idx].open;
+        expected.arm.jog[ARM_GRIPPER] = cases[idx].gripper_jog;
 
         ExpectCommand(command, expected);
     }
+}
+
+/* 5b：选中夹爪时右摇杆也能点动夹爪，X/Y 优先于右摇杆 */
+static void TestGripperKeysOverrideStick(void)
+{
+    RemotePhoneArm_t arm;
+    RemotePhoneArm_Init(&arm);
+    arm.selected = ARM_GRIPPER;
+
+    srm_control_state_t raw = {.right_y = 511};
+    RemoteCommand_t command;
+
+    // 只推右摇杆：夹爪按摇杆点动
+    assert(RemotePhone_Convert(&raw, &arm, &command));
+    ExpectOnlyJog(command, ARM_GRIPPER, 1.0f);
+
+    // 摇杆推向夹紧，同时按 Y：按松开处理
+    raw.buttons = 0x08U;
+    assert(RemotePhone_Convert(&raw, &arm, &command));
+    ExpectOnlyJog(command, ARM_GRIPPER, -1.0f);
+
+    // X、Y 同时按：夹爪不动，摇杆也不起作用
+    raw.buttons = 0x0CU;
+    assert(RemotePhone_Convert(&raw, &arm, &command));
+    ExpectOnlyJog(command, ARM_GRIPPER, 0.0f);
 }
 
 /* 6：检查 S1 和 S2 的四种组合 */
@@ -411,9 +430,8 @@ static void TestProcessByteAndRearm(void)
         .turn = 1.0f,
         .enabled = true,
         .arm = {
-            .jog = {[ARM_J2] = -1.0f},
-            .preset = ARM_PRESET_GRAB_READY,
-            .gripper_close = true
+            .jog = {[ARM_J2] = -1.0f, [ARM_GRIPPER] = 1.0f},
+            .preset = ARM_PRESET_GRAB_READY
         }
     };
 
@@ -433,6 +451,7 @@ int main(void)
     TestSelectionWrap();
     TestTurnMapping();
     TestButtonMapping();
+    TestGripperKeysOverrideStick();
     TestSwitchMapping();
     TestInvalidFrame();
     TestInvalidArguments();
