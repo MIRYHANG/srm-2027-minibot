@@ -85,6 +85,12 @@ add_executable(${CMAKE_PROJECT_NAME}
         Application/robot_cmd.c
         Application/chassis_drive.c
         Application/chassis_drive.h
+        Common/NRF24/NRF24.c
+        Common/NRF24/NRF24.h
+        Common/NRF24/NRF24_port.c
+        Common/NRF24/NRF24_port.h
+        Common/NRF24/nrf_link.c
+        Common/NRF24/nrf_link.h
 )
 
 # Add STM32CubeMX generated sources
@@ -106,6 +112,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/BSP
         ${CMAKE_CURRENT_SOURCE_DIR}/Application
         ${CMAKE_CURRENT_SOURCE_DIR}/Protocol
+        ${CMAKE_CURRENT_SOURCE_DIR}/Common/NRF24
     # Add user defined include paths
 )
 

@@ -46,6 +46,8 @@
 #include "safety.h"
 #include "safety_input.h"
 #include "chassis_drive.h"
+#include "NRF24.h"
+#include "nrf_link.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -89,6 +91,10 @@ typedef struct
   RobotCmdOutput_t output; // 底盘和机械臂命令
   uint32_t stamp_ms;       // 协议任务发布这份命令的时间
 } RobotPublished_t;
+
+#define HANDHELD_RADIO_POWERUP_MS 100U // 模块上电后需要稳定的时间
+#define HANDHELD_RADIO_RETRY_MS   100U // 配置失败后的重试间隔
+#define HANDHELD_RADIO_RX_BUDGET  3U   // 每周期最多读几包，等于 RX FIFO 深度
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -144,6 +150,12 @@ static RemotePhoneArm_t phone_arm;
 static RobotCmd_t robot_cmd;
 static SafetyInput_t safety_input;
 static uint32_t led_run_count = 0U;
+static bool radio_ready;
+static uint32_t radio_last_try_ms;
+
+// 手柄链路测试用，在调试器 Live Watch 里观察
+volatile uint32_t radio_rx_count;
+volatile uint8_t radio_rx_last;
 
 // 长度为 1，只保存协议任务最近发布的一份完整命令
 static QueueHandle_t robot_cmd_queue = NULL;
@@ -182,6 +194,7 @@ static void WheelSpeed_Update(Motor_t *motor, Encoder_t *encoder,
                               PID_Instance *pid, float target_rpm, float dt_s);
 static void PhoneRemote_InitAndStart(void);
 static void PhoneRemote_Update(void);
+static void HandheldRadio_Update(void);
 static void Chassis_UpdateFromCmd(const ChassisCmd_t *cmd, float dt_s);
 static void Chassis_Stop(void);
 static bool RobotCmd_GetLatest(RobotCmdOutput_t *out);
@@ -434,6 +447,7 @@ void StartProtocolTask(void const * argument)
   {
     // 接收并解析手机数据，有效帧存进 remote_input
     PhoneRemote_Update();
+    HandheldRadio_Update();
 
     RemoteCommand_t latest;
     bool online = RemoteInput_GetLatest(&remote_input,HAL_GetTick(),PHONE_TIMEOUT_MS,&latest);
@@ -1018,6 +1032,46 @@ static void StatusLed_Update(const RobotCmdOutput_t *output, uint8_t safety_acti
                     output->chassis.enabled ? LED_ON_LEVEL : LED_OFF_LEVEL);
   HAL_GPIO_WritePin(LED_FAULT_GPIO_Port, LED_FAULT_Pin,
                     safety_active != 0U ? LED_ON_LEVEL : LED_OFF_LEVEL);
+}
+
+/**
+ * @brief 手柄无线接收，链路测试版本：只统计收包数量
+ * @note 只在 ProtocolTask 中调用；不阻塞，配置失败后每 100 ms 重试一次
+ * @note 协议任务 30 ms 内必须打心跳，所以不能在这里 osDelay 等模块上电
+ */
+static void HandheldRadio_Update(void)
+{
+  uint32_t now = HAL_GetTick();
+
+  if (!radio_ready)
+  {
+    if (now < HANDHELD_RADIO_POWERUP_MS ||
+        (uint32_t)(now - radio_last_try_ms) < HANDHELD_RADIO_RETRY_MS)
+    {
+      return;
+    }
+    radio_last_try_ms = now;
+    radio_ready = NrfLink_Configure(nRF24_MODE_RX);
+    return;
+  }
+
+  uint8_t buf[NRF_LINK_MAX_PAYLOAD];
+  uint8_t len = 0U;
+  for (uint32_t count = 0U; count < HANDHELD_RADIO_RX_BUDGET; count++)
+  {
+    if (!NrfLink_Receive(buf, &len))
+    {
+      break;
+    }
+    radio_rx_count++;
+    radio_rx_last = buf[0];
+  }
+
+  // SPI 出错时下一周期重新配置
+  if (NRF24_Port_HasFault())
+  {
+    radio_ready = false;
+  }
 }
 /* USER CODE END Application */
 

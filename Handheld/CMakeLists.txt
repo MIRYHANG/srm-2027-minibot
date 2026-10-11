@@ -32,11 +32,13 @@ message("Build type: " ${CMAKE_BUILD_TYPE})
 enable_language(C ASM)
 
 # Create an executable object type
+# 手柄和主控共用的代码，位于仓库根目录 Common/
+set(COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../Common)
+
 add_executable(${CMAKE_PROJECT_NAME}
-        BSP/NRF24.c
-        BSP/NRF24.h
-        BSP/NRF24_port.c
-        BSP/NRF24_port.h)
+        ${COMMON_DIR}/NRF24/NRF24.c
+        ${COMMON_DIR}/NRF24/NRF24_port.c
+        ${COMMON_DIR}/NRF24/nrf_link.c)
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
@@ -53,7 +55,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-        BSP
+        ${COMMON_DIR}/NRF24
     # Add user defined include paths
 )
 
