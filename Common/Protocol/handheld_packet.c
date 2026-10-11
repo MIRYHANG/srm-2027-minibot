@@ -151,7 +151,7 @@ bool HhPacket_Decode(const uint8_t *data, size_t length, HhPacket_t *packet)
 
     for (size_t idx = 0;idx < HH_JOINT_COUNT;++idx) {
         uint8_t raw = data[PKT_JOG + idx];
-        next.jog[idx] = raw > 0x80 ? (int8_t)((int16_t)raw - 0x100) : (int8_t)raw;
+        next.jog[idx] = raw >= 0x80 ? (int8_t)((int16_t)raw - 0x100) : (int8_t)raw;
     }
 
     if (!PacketValid(&next))
