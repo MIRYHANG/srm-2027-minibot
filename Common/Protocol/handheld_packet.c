@@ -12,7 +12,17 @@
 #define PKT_PRESET          7U
 #define PKT_JOG             8U   // 占 8～13，共 6 个字节
 #define PKT_CRC             (HH_PACKET_LEN - 1U)
+#define STS_VERSION         0U
+#define STS_FLAGS           1U
+#define STS_GEAR            2U
+#define STS_CRC             (HH_STATUS_LEN - 1U)
 
+/**
+ * @brief 把一个 int16_t 拆成两个字节，低字节在前，编码时使用
+ * @param out 输出位置，写入 out[0] 和 out[1]
+ * @param value 待拆分的数，负数按补码拆分
+ * @note 先转成无符号数再移位，避免对负数右移时出现编译器相关的行为
+ */
 static void PutInt16(uint8_t *out, int16_t value)
 {
     uint16_t raw = (uint16_t)value;
@@ -20,6 +30,12 @@ static void PutInt16(uint8_t *out, int16_t value)
     out[1] = (uint8_t)(raw >> 8);
 }
 
+/**
+ * @brief 把两个字节拼回 int16_t，低字节在前，解码时使用，是 PutInt16 的逆过程
+ * @param in 输入位置，读取 in[0] 和 in[1]
+ * @return 拼回的数，最高位为 1 时还原为负数
+ * @note 不直接把无符号数强转成有符号数，该转换的结果由编译器决定；这里按补码规则显式换算
+ */
 static int16_t GetInt16(const uint8_t *in)
 {
     uint16_t raw = (uint16_t)((uint16_t)in[0] | ((uint16_t)in[1] << 8));
@@ -147,18 +163,55 @@ bool HhPacket_Decode(const uint8_t *data, size_t length, HhPacket_t *packet)
     return true;
 }
 
+/**
+ * @brief 检查状态包的标志位是否只含已定义的位
+ */
+static bool StatusValid(const HhStatus_t *status)
+{
+    return (status->flags & (uint8_t)~HH_STATUS_VALID_MASK) == 0U;
+}
+
 size_t HhStatus_Encode(const HhStatus_t *status, uint8_t *out, size_t capacity)
 {
-    (void)status;
-    (void)out;
-    (void)capacity;
-    return 0U;
+    if (status == NULL || out == NULL || capacity < HH_STATUS_LEN || !StatusValid(status))
+    {
+        return 0U;
+    }
+
+    out[STS_VERSION] = HH_PACKET_VERSION;
+    out[STS_FLAGS] = status->flags;
+    out[STS_GEAR] = status->gear;
+    out[STS_CRC] = HhPacket_Crc8(out, STS_CRC);
+
+    return HH_STATUS_LEN;
 }
 
 bool HhStatus_Decode(const uint8_t *data, size_t length, HhStatus_t *status)
 {
-    (void)data;
-    (void)length;
-    (void)status;
-    return false;
+    if (data == NULL || length != HH_STATUS_LEN || status == NULL)
+    {
+        return false;
+    }
+
+    if (data[STS_VERSION] != HH_PACKET_VERSION)
+    {
+        return false;
+    }
+
+    if (HhPacket_Crc8(data, STS_CRC) != data[STS_CRC])
+    {
+        return false;
+    }
+
+    HhStatus_t next = {0};
+    next.flags = data[STS_FLAGS];
+    next.gear = data[STS_GEAR];
+
+    if (!StatusValid(&next))
+    {
+        return false;
+    }
+
+    *status = next;
+    return true;
 }
