@@ -40,7 +40,9 @@ add_executable(${CMAKE_PROJECT_NAME}
         ${COMMON_DIR}/NRF24/NRF24_port.c
         ${COMMON_DIR}/NRF24/nrf_link.c
         ${COMMON_DIR}/Protocol/handheld_packet.c
-        Application/hh_logic.c)
+        Application/hh_logic.c
+        Application/hh_input.c
+        Application/hh_input.h)
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
