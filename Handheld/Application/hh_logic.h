@@ -10,6 +10,8 @@
 
 #include "handheld_packet.h"
 
+#define HH_LED_BLINK_HALF_MS            100U // 机械臂停止时 LED2 快闪，亮 100 ms 灭 100 ms
+
 typedef struct {
     bool start;                  // 使能键
     bool estop;                  // 失能键（急停）
