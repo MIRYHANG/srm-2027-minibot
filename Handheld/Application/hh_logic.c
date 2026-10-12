@@ -62,7 +62,7 @@ static void UpdateEnable(HhLogic_t *logic, const HhInput_t *input)
  */
 static void UpdateArmStop(HhLogic_t *logic, const HhInput_t *input)
 {
-    if (input->arm_stop && !logic->arm_stopped)
+    if (input->arm_stop && !logic->last_arm_stop)
     {
         logic->arm_stopped = true;
     }
