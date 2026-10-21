@@ -50,6 +50,7 @@
 #include "nrf_link.h"
 #include "handheld_packet.h"
 #include "remote_handheld.h"
+#include "spi1_bus.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -101,6 +102,7 @@ typedef struct
 #define HANDHELD_RADIO_POWERUP_MS 100U // 模块上电后需要稳定的时间
 #define HANDHELD_RADIO_RETRY_MS   100U // 配置失败后的重试间隔
 #define HANDHELD_RADIO_RX_BUDGET  3U   // 每周期最多读几包，等于 RX FIFO 深度
+#define HANDHELD_SPI_LOCK_TIMEOUT_MS 2U // SPI1 与 BMI088 共用，拿不到锁就跳过本周期，靠手柄超时兜底
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -278,6 +280,11 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
+  // SPI1 由 BMI088（ImuTask）和 NRF24（ProtocolTask）共用
+  if (!Spi1Bus_Init())
+  {
+    Error_Handler();
+  }
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
@@ -454,7 +461,13 @@ void StartProtocolTask(void const * argument)
   {
     // 接收并解析手机数据，有效帧存进 remote_input
     PhoneRemote_Update();
-    HandheldRadio_Update();
+
+    // 锁加在调用处：HandheldRadio_Update 有多处提前 return，加在函数里容易漏解锁
+    if (Spi1Bus_Lock(HANDHELD_SPI_LOCK_TIMEOUT_MS))
+    {
+      HandheldRadio_Update();
+      Spi1Bus_Unlock();
+    }
 
     RemoteCommand_t latest;
     bool online = RemoteInput_GetLatest(&remote_input, HAL_GetTick(),
@@ -468,7 +481,11 @@ void StartProtocolTask(void const * argument)
     };
     RobotCmd_Update(&robot_cmd, online, &latest, safety_active, &published.output);
     StatusLed_Update(&published.output, safety_active);
-    HandheldRadio_PublishStatus(&robot_cmd, safety_active);
+    if (Spi1Bus_Lock(HANDHELD_SPI_LOCK_TIMEOUT_MS))
+    {
+      HandheldRadio_PublishStatus(&robot_cmd, safety_active);
+      Spi1Bus_Unlock();
+    }
     
     // 长度为 1 的队列始终覆盖为最新命令，不积累历史命令
     if (xQueueOverwrite(robot_cmd_queue, &published) != pdPASS)

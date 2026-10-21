@@ -97,6 +97,8 @@ add_executable(${CMAKE_PROJECT_NAME}
         Application/remote_handheld.h
         BSP/bmi088.c
         BSP/bmi088.h
+        BSP/spi1_bus.c
+        BSP/spi1_bus.h
 )
 
 # Add STM32CubeMX generated sources
