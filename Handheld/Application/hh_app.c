@@ -92,6 +92,7 @@ void HAL_ADC_ErrorCallback(ADC_HandleTypeDef *adc)
     }
 }
 
+/*-------------两通道单次扫描，等待3ms------------*/
 static bool ReadAxes(uint16_t *x, uint16_t *y)
 {
     adc_done = false;
@@ -126,4 +127,64 @@ static bool ReadAxes(uint16_t *x, uint16_t *y)
     *y = adc_dma[1]; /* rank 2：PA1 / Y */
 
     return *x <= HH_ADC_MAX && *y <= HH_ADC_MAX;
+}
+
+static bool StableCenter(const uint16_t *values)
+{
+    uint16_t lo = values[0], hi = values[0];
+
+    for (unsigned i = 1U; i < CAL_SAMPLES; ++i)
+    {
+        if (values[i] < lo)
+        {
+            /*----------更新最小值---------*/
+            lo = values[i];
+        }
+        if (values[i] > hi)
+        {
+            /*----------更新最大值---------*/
+            hi = values[i];
+        }
+    }
+
+    /*------------死区标定判断--------------*/
+    return (uint16_t)(hi - lo) <= HH_STICK_DEADZONE;
+}
+
+static void SampleInput(void)
+{
+    /*-------------------读取按键-------------------*/
+    (void)HhDebounce_Update(&debounce, ReadButtons());
+    
+    uint16_t x, y;
+    input_ok = ReadAxes(&x, &y);
+
+    if (!input_ok)
+    {
+        cal_count = 0U;
+        return;
+    }
+
+    last_input_ms = HAL_GetTick();
+
+    if (!calibrated)
+    {
+        cal_x[cal_count] = x;
+        cal_y[cal_count++] = y;
+
+        if (cal_count == CAL_SAMPLES)
+        {
+            /*------------标定中点--------------*/
+            calibrated =
+                StableCenter(cal_x) &&
+                StableCenter(cal_y) &&
+                HhAxis_Calibrate(&axis_x, cal_x, CAL_SAMPLES) &&
+                HhAxis_Calibrate(&axis_y, cal_y, CAL_SAMPLES);
+
+            cal_count = 0U;
+        }
+    }
+
+    forward = HhAxis_Normalize(&axis_y, y);
+    left = HhAxis_Normalize(&axis_x, x);
 }
