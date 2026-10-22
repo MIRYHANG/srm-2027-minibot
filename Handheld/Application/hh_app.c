@@ -155,7 +155,7 @@ static void SampleInput(void)
 {
     /*-------------------读取按键-------------------*/
     (void)HhDebounce_Update(&debounce, ReadButtons());
-    
+
     uint16_t x, y;
     input_ok = ReadAxes(&x, &y);
 
@@ -188,3 +188,70 @@ static void SampleInput(void)
     forward = HhAxis_Normalize(&axis_y, y);
     left = HhAxis_Normalize(&axis_x, x);
 }
+
+static bool InputHealthy(uint32_t now)
+{
+    /*---------------综合消抖、超时、标定后的返回---------------*/
+    return calibrated && input_ok && (uint32_t)(now - last_input_ms) <= 20U;
+}
+
+static void SendControl(void)
+{
+    HhInput_t input;
+    HhPacket_t packet;
+
+    /*-------------组装输入------------*/
+    HhInput_Build(debounce.stable, forward, left, &input);
+
+    if (!InputHealthy(HAL_GetTick()))
+    {
+        input.estop = true;
+    }
+
+    /*---------------把输入指令改成控制指令----------------*/
+    if (!HhLogic_Step(&logic, &input, &packet))
+    {
+        return;
+    }
+
+    if (!radio_ready || (uint32_t)(HAL_GetTick() - radio_ready_ms) < 2U)
+    {
+        return;
+    }
+
+    uint8_t tx[HH_PACKET_LEN];
+    uint8_t ack[NRF_LINK_MAX_PAYLOAD];
+    uint8_t ack_len = 0U;
+
+    if (HhPacket_Encode(&packet, tx, sizeof(tx)) != HH_PACKET_LEN)
+    {
+        return;
+    }
+
+    NrfTxResult_t result =
+        NrfLink_Send(tx, sizeof(tx), ack, &ack_len);
+
+    uint32_t now = HAL_GetTick();
+
+    if (NRF24_Port_HasFault() || result == NRF_TX_TIMEOUT)
+    {
+        radio_ready = false;
+        have_status = false;
+        retry_ms = now;
+        return;
+    }
+
+    if (result == NRF_TX_OK &&
+        HhStatus_Decode(ack, ack_len, &car_status) &&
+        car_status.gear >= 1U && car_status.gear <= 3U)
+    {
+        have_status = true;
+        status_ms = now;
+    }
+}
+
+static void WriteLed(GPIO_TypeDef *port, uint16_t pin, bool on)
+{
+    HAL_GPIO_WritePin(port, pin,on ? LED_ACTIVE : (LED_ACTIVE == GPIO_PIN_SET ? GPIO_PIN_RESET : GPIO_PIN_SET));
+}
+
