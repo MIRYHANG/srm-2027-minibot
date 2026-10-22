@@ -42,7 +42,9 @@ add_executable(${CMAKE_PROJECT_NAME}
         ${COMMON_DIR}/Protocol/handheld_packet.c
         Application/hh_logic.c
         Application/hh_input.c
-        Application/hh_input.h)
+        Application/hh_input.h
+        Application/hh_app.c
+        Application/hh_app.h)
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)

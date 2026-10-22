@@ -34,6 +34,7 @@ uint16_t HhDebounce_Update(HhDebounce_t *debounce, uint16_t raw)
         if (pressed == stable)
         {
             debounce->count[btn] = 0;
+            continue;
         }
 
         /*------失能键按下不等待，立即生效------*/
