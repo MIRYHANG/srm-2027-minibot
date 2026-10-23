@@ -17,6 +17,11 @@ void nRF24_CSN_H(void) { HAL_GPIO_WritePin(NRF_CSN_GPIO_Port, NRF_CSN_Pin, GPIO_
 
 uint8_t nRF24_LL_RW(uint8_t data)
 {
+    if (spi_fault)
+    {
+        return 0xFFU;
+    }
+    
     uint8_t result = 0xFFU;
 
     if (HAL_SPI_TransmitReceive(&hspi1, &data, &result, 1U, NRF24_SPI_TIMEOUT_MS) != HAL_OK)
