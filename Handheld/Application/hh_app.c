@@ -8,6 +8,9 @@
 #include "hh_input.h"
 #include "nrf_link.h"
 #include "NRF24.h"
+#ifdef HAL_IWDG_MODULE_ENABLED
+   #include "iwdg.h"
+#endif
 
 #define SAMPLE_MS          5U
 #define SEND_MS            10U
@@ -15,6 +18,15 @@
 #define STICK_X_INVERT     false
 #define STICK_Y_INVERT     false
 #define LED_ACTIVE         GPIO_PIN_SET
+
+#define INPUT_TIMEOUT_MS   20U   // 超过这么久没读到摇杆，视为输入异常
+#define RADIO_POWERUP_MS   100U  // NRF 模块上电后需要稳定的时间
+#define RADIO_RETRY_MS     100U  // 配置失败后的重试间隔
+#define RADIO_SETTLE_MS    2U    // 配置完成后等这么久再发第一包
+#define LINK_TIMEOUT_MS    100U  // 超过这么久没收到有效 ACK，视为链路断开
+#define LED_FAST_HALF_MS   100U  // 快闪：亮 100 ms，灭 100 ms
+#define LED_SLOW_HALF_MS   500U  // 慢闪：亮 500 ms，灭 500 ms
+
 
 typedef struct
 {
@@ -253,5 +265,133 @@ static void SendControl(void)
 static void WriteLed(GPIO_TypeDef *port, uint16_t pin, bool on)
 {
     HAL_GPIO_WritePin(port, pin,on ? LED_ACTIVE : (LED_ACTIVE == GPIO_PIN_SET ? GPIO_PIN_RESET : GPIO_PIN_SET));
+}
+
+/**
+ * @brief NRF 未就绪时，上电满 100 ms 后每 100 ms 重试一次配置
+ */
+static void RadioService(uint32_t now)
+{
+    if (radio_ready || now < RADIO_POWERUP_MS || (uint32_t)(now - retry_ms) < RADIO_RETRY_MS)
+    {
+        return;
+    }
+
+    retry_ms = now;
+    radio_ready = NrfLink_Configure(nRF24_MODE_TX);
+
+    if (radio_ready)
+    {
+        radio_ready_ms = HAL_GetTick();
+    }
+}
+
+/**
+ * @brief 周期到了返回 true，并推进下一次的时间
+ * @note 主循环被耽误超过两个周期时直接对齐到现在，不连续补发好几包
+ */
+static bool PeriodDue(uint32_t *last_ms, uint32_t period_ms, uint32_t now)
+{
+    uint32_t elapsed = (uint32_t)(now - *last_ms);
+
+    if (elapsed < period_ms)
+    {
+        return false;
+    }
+
+    *last_ms = (elapsed >= 2U * period_ms) ? now : (*last_ms + period_ms);
+    return true;
+}
+
+static bool Blink(uint32_t now, uint32_t half_ms)
+{
+    return ((now / half_ms) % 2U) == 0U;
+}
+
+static bool LinkOk(uint32_t now)
+{
+    return have_status && (uint32_t)(now - status_ms) <= LINK_TIMEOUT_MS;
+}
+
+/**
+ * @brief LED_STATUS1 显示小车状态
+ * @note 链路断开：灭；小车急停或驱动故障：快闪；小车已使能：常亮；小车未使能：慢闪
+ */
+static bool Led1On(uint32_t now)
+{
+    if (!LinkOk(now))
+    {
+        return false;
+    }
+    if ((car_status.flags & HH_STATUS_SAFETY) != 0U)
+    {
+        return Blink(now, LED_FAST_HALF_MS);
+    }
+    if ((car_status.flags & HH_STATUS_ENABLED) != 0U)
+    {
+        return true;
+    }
+    return Blink(now, LED_SLOW_HALF_MS);
+}
+
+static void UpdateLeds(uint32_t now)
+{
+    if (!InputHealthy(now))
+    {
+        // 摇杆未标定（上电时被推着）或 ADC 异常：两灯同步快闪，此时手柄强制失能
+        bool on = Blink(now, LED_FAST_HALF_MS);
+        WriteLed(LED_STATUS1_GPIO_Port, LED_STATUS1_Pin, on);
+        WriteLed(LED_STATUS2_GPIO_Port, LED_STATUS2_Pin, on);
+        return;
+    }
+
+    WriteLed(LED_STATUS1_GPIO_Port, LED_STATUS1_Pin, Led1On(now));
+    WriteLed(LED_STATUS2_GPIO_Port, LED_STATUS2_Pin, HhLogic_DirLedOn(&logic, now));
+}
+
+static void FeedWatchdog(void)
+{
+#ifdef HAL_IWDG_MODULE_ENABLED
+    (void)HAL_IWDG_Refresh(&hiwdg);
+#endif
+}
+
+void HhApp_Init(void)
+{
+    HhLogic_Init(&logic);
+    HhAxis_Init(&axis_x, STICK_X_INVERT);
+    HhAxis_Init(&axis_y, STICK_Y_INVERT);
+
+    // 用第一次采样初始化，上电时就按着的键视为按着，不会被当成一次按下
+    HhDebounce_Init(&debounce, ReadButtons());
+
+    // F1 的 ADC 在第一次转换前要做一次自校准；失败时 ReadAxes 会一直报错，手柄保持失能
+    (void)HAL_ADCEx_Calibration_Start(&hadc1);
+
+    uint32_t now = HAL_GetTick();
+    sample_ms = now;
+    send_ms = now;
+    retry_ms = now - RADIO_RETRY_MS; // 上电满 RADIO_POWERUP_MS 后立刻尝试第一次配置
+
+    WriteLed(LED_STATUS1_GPIO_Port, LED_STATUS1_Pin, false);
+    WriteLed(LED_STATUS2_GPIO_Port, LED_STATUS2_Pin, false);
+}
+
+void HhApp_Update(void)
+{
+    if (PeriodDue(&sample_ms, SAMPLE_MS, HAL_GetTick()))
+    {
+        SampleInput();
+    }
+
+    RadioService(HAL_GetTick());
+
+    if (PeriodDue(&send_ms, SEND_MS, HAL_GetTick()))
+    {
+        SendControl();
+    }
+
+    UpdateLeds(HAL_GetTick());
+    FeedWatchdog();
 }
 
