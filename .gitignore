@@ -1,9 +1,12 @@
+# 规则对整个仓库生效，包括 Handheld/ 和 bringup/ 下的子工程
+# 以 / 开头的只匹配仓库根目录，**/ 开头的匹配任意一层
+
 # CLion 项目配置
-/.idea/
+**/.idea/
 
 # CLion/CMake 构建目录
-/build/
-/cmake-build-*/
+**/build/
+**/cmake-build-*/
 
 # CMake 本机配置
 CMakeUserPresets.json
@@ -16,6 +19,7 @@ CMakeUserPresets.json
 *.obj
 *.d
 *.dep
+*.su
 
 # 固件构建产物
 *.elf
@@ -25,14 +29,33 @@ CMakeUserPresets.json
 *.lst
 *.axf
 
+# 主机测试产物（Windows 生成 .exe，覆盖率工具生成 .gcda/.gcno/.gcov）
+*.exe
+*.gcda
+*.gcno
+*.gcov
+
+# 调试器本机配置（Ozone / J-Link）
+*.jdebug.user
+JLinkLog.txt
+JLinkSettings.ini
+
+# 本地临时目录（docx 审阅、与小车无关的个人项目等）
+/tmp/
+
+# 压缩包和备份快照，代码历史以 git 为准
+*.zip
+*.7z
+*.rar
+
 # 临时文件
 *.tmp
 *.bak
 *~
+~$*
 .DS_Store
 Thumbs.db
 desktop.ini
 
-*.exe
 # 大体积原始调试数据
 /logs/raw/
