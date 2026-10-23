@@ -25,10 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdbool.h>
-
-#include "NRF24.h"
-#include "nrf_link.h"
+#include "hh_app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -38,8 +35,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define NRF_POWERUP_MS   100U  // 模块上电后需要稳定的时间
-#define LINK_TEST_PERIOD 10U   // 链路测试：每 10 ms 发一包
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -50,11 +46,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-// 链路测试用，在调试器 Live Watch 里观察
-volatile bool radio_ready;
-volatile uint32_t tx_ok_count;
-volatile uint32_t tx_lost_count;
-volatile uint32_t tx_timeout_count;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -101,11 +93,11 @@ int main(void)
   MX_ADC1_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_Delay(NRF_POWERUP_MS);
-  radio_ready = NrfLink_Configure(nRF24_MODE_TX);
+  // 断点暂停时看门狗也暂停，调试时不会被复位
+  __HAL_DBGMCU_FREEZE_IWDG();
 
-  uint32_t last_send = HAL_GetTick();
-  uint8_t counter = 0U;
+  // 不阻塞：NRF 上电等待和配置重试都在 HhApp_Update 里按时间处理
+  HhApp_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -115,27 +107,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    if (radio_ready && (uint32_t)(HAL_GetTick() - last_send) >= LINK_TEST_PERIOD)
-    {
-      last_send += LINK_TEST_PERIOD;
-
-      uint8_t buf[1] = {counter};
-      counter++;
-
-      switch (NrfLink_Send(buf, (uint8_t)sizeof(buf), NULL, NULL))
-      {
-        case NRF_TX_OK:
-          tx_ok_count++;
-          HAL_GPIO_TogglePin(LED_STATUS1_GPIO_Port, LED_STATUS1_Pin);
-          break;
-        case NRF_TX_LOST:
-          tx_lost_count++;
-          break;
-        default:
-          tx_timeout_count++;
-          break;
-      }
-    }
+    HhApp_Update();
   }
   /* USER CODE END 3 */
 }

@@ -37,10 +37,15 @@ set(COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../Common)
 
 add_executable(${CMAKE_PROJECT_NAME}
         ${COMMON_DIR}/NRF24/NRF24.c
+        ${COMMON_DIR}/NRF24/NRF24.h
         ${COMMON_DIR}/NRF24/NRF24_port.c
+        ${COMMON_DIR}/NRF24/NRF24_port.h
         ${COMMON_DIR}/NRF24/nrf_link.c
+        ${COMMON_DIR}/NRF24/nrf_link.h
         ${COMMON_DIR}/Protocol/handheld_packet.c
+        ${COMMON_DIR}/Protocol/handheld_packet.h
         Application/hh_logic.c
+        Application/hh_logic.h
         Application/hh_input.c
         Application/hh_input.h
         Application/hh_app.c
