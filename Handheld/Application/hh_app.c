@@ -72,6 +72,10 @@ static HhStatus_t car_status;
 static uint32_t sample_ms, send_ms, retry_ms, radio_ready_ms;
 static uint32_t last_input_ms, status_ms;
 
+volatile uint32_t tx_ok_count;
+volatile uint32_t tx_lost_count;
+volatile uint32_t tx_timeout_count;
+
 static uint16_t ReadButtons(void)
 {
     uint16_t value = 0U;
@@ -204,7 +208,7 @@ static void SampleInput(void)
 static bool InputHealthy(uint32_t now)
 {
     /*---------------综合消抖、超时、标定后的返回---------------*/
-    return calibrated && input_ok && (uint32_t)(now - last_input_ms) <= 20U;
+    return calibrated && input_ok && (uint32_t)(now - last_input_ms) <= INPUT_TIMEOUT_MS;
 }
 
 static void SendControl(void)
@@ -226,7 +230,7 @@ static void SendControl(void)
         return;
     }
 
-    if (!radio_ready || (uint32_t)(HAL_GetTick() - radio_ready_ms) < 2U)
+    if (!radio_ready || (uint32_t)(HAL_GetTick() - radio_ready_ms) < RADIO_SETTLE_MS)
     {
         return;
     }
@@ -244,6 +248,19 @@ static void SendControl(void)
         NrfLink_Send(tx, sizeof(tx), ack, &ack_len);
 
     uint32_t now = HAL_GetTick();
+
+    switch (result)
+    {
+        case NRF_TX_OK:
+            tx_ok_count++;
+            break;
+        case NRF_TX_LOST:
+            tx_lost_count++;
+            break;
+        default:
+            tx_timeout_count++;
+            break;
+    }
 
     if (NRF24_Port_HasFault() || result == NRF_TX_TIMEOUT)
     {
