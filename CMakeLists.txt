@@ -99,6 +99,12 @@ add_executable(${CMAKE_PROJECT_NAME}
         BSP/bmi088.h
         BSP/spi1_bus.c
         BSP/spi1_bus.h
+        Application/battery_monitor.c
+        Application/battery_monitor.h
+        Application/imu_yaw.c
+        Application/imu_yaw.h
+        Application/heading_hold.c
+        Application/heading_hold.h
 )
 
 # Add STM32CubeMX generated sources

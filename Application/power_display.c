@@ -173,3 +173,36 @@ void PowerDisplay_Format(const Ina226Reading_t *reading, bool valid,
     const char *reset[] = {ResetCauseText(cause)};
     Compose(lines[7], reset, 1U);
 }
+
+static const char *BatteryLevelText(BatteryLevel_t level)
+{
+    switch (level)
+    {
+    case BATTERY_OK:       return "OK";
+    case BATTERY_LOW:      return "LOW";
+    case BATTERY_CRITICAL: return "STOP";
+    default:               return "?";
+    }
+}
+
+void PowerDisplay_FormatBattery(BatteryLevel_t level, uint8_t percent,
+                                PowerDisplayLine_t line)
+{
+    if (line == NULL)
+    {
+        return;
+    }
+
+    // 电量固定 3 位右对齐，和状态之间留一个空格
+    char number[4] = {' ', ' ', '-', '\0'};
+    if (level != BATTERY_UNKNOWN)
+    {
+        uint8_t value = percent > 100U ? 100U : percent;
+        number[0] = value >= 100U ? '1' : ' ';
+        number[1] = value >= 10U ? (char)('0' + (value / 10U) % 10U) : ' ';
+        number[2] = (char)('0' + value % 10U);
+    }
+
+    const char *parts[] = {"BAT ", number, "% ", BatteryLevelText(level)};
+    Compose(line, parts, sizeof(parts) / sizeof(parts[0]));
+}

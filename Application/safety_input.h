@@ -10,8 +10,9 @@
 #define SAFETY_FAULT_RL 0x04U // 左后驱动故障
 #define SAFETY_FAULT_RR 0x08U // 右后驱动故障
 #define SAFETY_ESTOP    0x10U // 急停按下
-#define SAFETY_ALL_MASK 0x1FU
-#define SAFETY_INPUT_COUNT 5U
+#define SAFETY_UNDERVOLT 0x20U // 电池欠压
+#define SAFETY_ALL_MASK 0x3FU
+#define SAFETY_INPUT_COUNT 6U
 
 #define SAFETY_RELEASE_SAMPLES 20U
 

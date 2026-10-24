@@ -120,12 +120,39 @@ static void TestResetCauses(void)
     }
 }
 
+static void TestBatteryLine(void)
+{
+    PowerDisplayLine_t line;
+
+    PowerDisplay_FormatBattery(BATTERY_OK, 75U, line);
+    assert(strcmp(line, "BAT  75% OK") == 0);
+
+    PowerDisplay_FormatBattery(BATTERY_OK, 100U, line);
+    assert(strcmp(line, "BAT 100% OK") == 0);
+
+    PowerDisplay_FormatBattery(BATTERY_LOW, 5U, line);
+    assert(strcmp(line, "BAT   5% LOW") == 0);
+
+    PowerDisplay_FormatBattery(BATTERY_CRITICAL, 0U, line);
+    assert(strcmp(line, "BAT   0% STOP") == 0);
+
+    // 没有读数时电量显示横线；超过 100 按 100 显示
+    PowerDisplay_FormatBattery(BATTERY_UNKNOWN, 50U, line);
+    assert(strcmp(line, "BAT   -% ?") == 0);
+    PowerDisplay_FormatBattery(BATTERY_OK, 250U, line);
+    assert(strcmp(line, "BAT 100% OK") == 0);
+
+    PowerDisplay_FormatBattery(BATTERY_OK, 50U, NULL);
+}
+
 int main(void)
 {
     TestValidReading();
     TestRoundingAndSign();
     TestInvalidValues();
     TestResetCauses();
+
+    TestBatteryLine();
 
     puts("Power display tests passed");
     return 0;

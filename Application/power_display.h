@@ -7,6 +7,7 @@
 
 #include <stdbool.h>
 
+#include "battery_monitor.h"
 #include "ina226.h"
 
 #define POWER_DISPLAY_LINES 8U  // 对应 OLED 的 8 页
@@ -35,5 +36,14 @@ typedef enum
 void PowerDisplay_Format(const Ina226Reading_t *reading, bool valid,
                          ResetCause_t cause,
                          PowerDisplayLine_t lines[POWER_DISPLAY_LINES]);
+
+/**
+ * @brief 生成电池状态行，例如 "BAT  75% OK"、"BAT  12% LOW"
+ * @param level 电池状态；BATTERY_UNKNOWN 时电量显示为横线
+ * @param percent 估算电量，0～100
+ * @param line 输出，以 '\0' 结尾且不超过 21 个字符
+ */
+void PowerDisplay_FormatBattery(BatteryLevel_t level, uint8_t percent,
+                                PowerDisplayLine_t line);
 
 #endif //XIAOSAI_POWER_DISPLAY_H

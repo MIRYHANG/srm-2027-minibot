@@ -11,7 +11,8 @@
 static const uint32_t deadlines[TASK_ID_COUNT] = {
     [TASK_ID_PROTOCOL] = TASK_MONITOR_PROTOCOL_TIMEOUT_MS,
     [TASK_ID_ARM] = TASK_MONITOR_ARM_TIMEOUT_MS,
-    [TASK_ID_SENSOR] = TASK_MONITOR_SENSOR_TIMEOUT_MS
+    [TASK_ID_SENSOR] = TASK_MONITOR_SENSOR_TIMEOUT_MS,
+    [TASK_ID_IMU] = TASK_MONITOR_IMU_TIMEOUT_MS
 };
 
 /* 让其他任务都正常，仅保留待检查任务的旧心跳 */
@@ -33,6 +34,7 @@ static void TestInitAlive(void)
     assert(TASK_MONITOR_PROTOCOL_TIMEOUT_MS == 30U);
     assert(TASK_MONITOR_ARM_TIMEOUT_MS == 100U);
     assert(TASK_MONITOR_SENSOR_TIMEOUT_MS == 400U);
+    assert(TASK_MONITOR_IMU_TIMEOUT_MS == 200U);
 
     TaskMonitor_Init(1000U);
     assert(TaskMonitor_AllAlive(1000U));
