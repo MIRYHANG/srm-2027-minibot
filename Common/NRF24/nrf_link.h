@@ -57,4 +57,11 @@ bool NrfLink_Receive(uint8_t *buf, uint8_t *len);
  */
 bool NrfLink_QueueAck(const uint8_t *buf, uint8_t len);
 
+/**
+ * @brief 回读寄存器，检查模块是否仍保持 NrfLink_Configure 写入的配置
+ * @return 配置仍在且 SPI 无故障返回 true
+ * @note 模块单独掉电复位后寄存器回到默认值，SPI 照常应答不报错，只能靠回读发现
+ */
+bool NrfLink_IsConfigured(void);
+
 #endif //XIAOSAI_NRF_LINK_H

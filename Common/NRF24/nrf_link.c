@@ -128,6 +128,14 @@ bool NrfLink_Receive(uint8_t *buf, uint8_t *len)
     return pipe != nRF24_RX_EMPTY && *len > 0U;
 }
 
+bool NrfLink_IsConfigured(void)
+{
+    // FEATURE 复位值为 0，只有 bit0～2 有效；模块断开时 MISO 读到 0xFF，也不会误判
+    uint8_t features = nRF24_GetFeatures();
+    return !NRF24_Port_HasFault() &&
+           features == (nRF24_FEATURE_EN_DPL | nRF24_FEATURE_EN_ACK_PAY);
+}
+
 bool NrfLink_QueueAck(const uint8_t *buf, uint8_t len)
 {
     if (buf == NULL || len == 0U || len > NRF_LINK_MAX_PAYLOAD)

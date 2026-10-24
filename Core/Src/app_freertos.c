@@ -61,7 +61,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 // 当前使用的遥控来源；改成 REMOTE_SOURCE_HANDHELD 即使用自制手柄
-#define REMOTE_ACTIVE_SOURCE REMOTE_SOURCE_PHONE
+#define REMOTE_ACTIVE_SOURCE REMOTE_SOURCE_HANDHELD
 
 // 暂定超时阈值，后续根据实际发送周期确认
 #define PHONE_TIMEOUT_MS 200U
@@ -102,6 +102,7 @@ typedef struct
 #define HANDHELD_RADIO_POWERUP_MS 100U // 模块上电后需要稳定的时间
 #define HANDHELD_RADIO_RETRY_MS   100U // 配置失败后的重试间隔
 #define HANDHELD_RADIO_RX_BUDGET  3U   // 每周期最多读几包，等于 RX FIFO 深度
+#define HANDHELD_RADIO_CHECK_MS   100U // 每 100 ms 回读一次模块配置
 #define HANDHELD_SPI_LOCK_TIMEOUT_MS 2U // SPI1 与 BMI088 共用，拿不到锁就跳过本周期，靠手柄超时兜底
 /* USER CODE END PD */
 
@@ -160,6 +161,7 @@ static SafetyInput_t safety_input;
 static uint32_t led_run_count = 0U;
 static bool radio_ready;
 static uint32_t radio_last_try_ms;
+static uint32_t radio_check_ms;
 
 // 手柄链路测试用，在调试器 Live Watch 里观察
 volatile uint32_t radio_rx_count;  // 收到的全部载荷
@@ -1108,8 +1110,15 @@ static void HandheldRadio_Update(void)
     }
   }
 
-  // SPI 出错时丢弃手柄状态，下一周期重新配置模块
-  if (NRF24_Port_HasFault())
+  // SPI 出错或模块单独复位丢了配置时，丢弃手柄状态，下一周期重新配置模块
+  bool lost = NRF24_Port_HasFault();
+  if (!lost && (uint32_t)(now - radio_check_ms) >= HANDHELD_RADIO_CHECK_MS)
+  {
+    radio_check_ms = now;
+    lost = !NrfLink_IsConfigured();
+  }
+
+  if (lost)
   {
     remote_input.handheld = (RemoteState_t){0};
     radio_ready = false;
