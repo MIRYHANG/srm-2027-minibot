@@ -66,11 +66,13 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : JOY_BTN_Pin */
-  GPIO_InitStruct.Pin = JOY_BTN_Pin;
+  /*Configure GPIO pins : JOY_BTN_Pin CHASSIS_CCW_BTN_Pin CHASSIS_CW_BTN_Pin REMOTE_START_BTN_Pin
+                           REMOTE_ESTOP_BTN_Pin */
+  GPIO_InitStruct.Pin = JOY_BTN_Pin|CHASSIS_CCW_BTN_Pin|CHASSIS_CW_BTN_Pin|REMOTE_START_BTN_Pin
+                          |REMOTE_ESTOP_BTN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(JOY_BTN_GPIO_Port, &GPIO_InitStruct);
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : NRF_CSN_Pin NRF_CE_Pin */
   GPIO_InitStruct.Pin = NRF_CSN_Pin|NRF_CE_Pin;
@@ -86,12 +88,6 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : CHASSIS_CCW_BTN_Pin CHASSIS_CW_BTN_Pin REMOTE_START_BTN_Pin REMOTE_ESTOP_BTN_Pin */
-  GPIO_InitStruct.Pin = CHASSIS_CCW_BTN_Pin|CHASSIS_CW_BTN_Pin|REMOTE_START_BTN_Pin|REMOTE_ESTOP_BTN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : NRF_IRQ_Pin */
   GPIO_InitStruct.Pin = NRF_IRQ_Pin;
