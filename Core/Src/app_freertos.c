@@ -60,8 +60,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-// 当前使用的遥控来源；改成 REMOTE_SOURCE_HANDHELD 即使用自制手柄
-#define REMOTE_ACTIVE_SOURCE REMOTE_SOURCE_HANDHELD
+// 当前使用的遥控来源：REMOTE_SOURCE_PHONE 手机蓝牙，REMOTE_SOURCE_HANDHELD 自制手柄
+#define REMOTE_ACTIVE_SOURCE REMOTE_SOURCE_PHONE
 
 // 暂定超时阈值，后续根据实际发送周期确认
 #define PHONE_TIMEOUT_MS 200U
