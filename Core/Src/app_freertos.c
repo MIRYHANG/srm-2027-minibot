@@ -149,8 +149,6 @@ static float target_rpm_fr = 0.0f;
 static float target_rpm_rl = 0.0f;
 static float target_rpm_rr = 0.0f;
 
-static ChassisRamp_t chassis_ramp;
-
 // 以下状态只由 ProtocolTask 访问
 // 其他任务通过 robot_cmd_queue 获取命令副本
 static srm_parser_t phone_parser;
@@ -207,7 +205,7 @@ static void PhoneRemote_Update(void);
 static void HandheldRadio_Update(void);
 static void HandheldRadio_PublishStatus(const RobotCmd_t *robot, uint8_t safety_active);
 static uint32_t RemoteTimeoutMs(RemoteSource_t source);
-static void Chassis_UpdateFromCmd(const ChassisCmd_t *cmd, float dt_s);
+static void Chassis_UpdateFromCmd(const ChassisCmd_t *cmd);
 static void Chassis_Stop(void);
 static bool RobotCmd_GetLatest(RobotCmdOutput_t *out);
 static uint8_t Safety_ReadRaw(void);
@@ -380,7 +378,7 @@ void StartChassisControlTask(void const * argument)
     }
     else
     {
-      Chassis_UpdateFromCmd(&command.chassis,dt_s);
+      Chassis_UpdateFromCmd(&command.chassis);
       ChassisSpeed_Update(dt_s);
     }
   }
@@ -561,8 +559,6 @@ static void Chassis_Stop(void)
   target_rpm_fr = 0.0f;
   target_rpm_rl = 0.0f;
   target_rpm_rr = 0.0f;
-
-  ChassisRamp_Reset(&chassis_ramp);
 
   // 将四个电机的 PWM 输出设为零
   Motor_Stop(&motor_fl);
@@ -805,18 +801,15 @@ static void PhoneRemote_Update(void)
 /**
  * @brief 按当前挡位把底盘命令换算成四轮目标转速
  * @param cmd 底盘命令，只读
- * @param dt_s 距上次调用的时间，单位为秒
  * @note 仅更新目标转速，不直接设置电机输出
  * @note 推满摇杆时最快那个轮子等于挡位转速；未使能或命令非法时目标转速为零
- * @note 目标转速经过加速度斜坡，猛推摇杆或换挡时轮速平滑变化
+ * @note 目标转速不经过斜坡，摇杆回中时目标立即为零，由速度 PID 尽快刹停
  */
-static void Chassis_UpdateFromCmd(const ChassisCmd_t *cmd, float dt_s)
+static void Chassis_UpdateFromCmd(const ChassisCmd_t *cmd)
 {
   MecanumWheelRpm_t wheels;
 
   (void)ChassisDrive_ToWheelRpm(cmd, &wheels);
-
-  (void)ChassisRamp_Step(&chassis_ramp, &wheels, dt_s, &wheels);
 
   target_rpm_fl = wheels.fl;
   target_rpm_fr = wheels.fr;
