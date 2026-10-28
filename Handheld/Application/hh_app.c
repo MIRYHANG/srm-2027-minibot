@@ -15,7 +15,7 @@
 #define SAMPLE_MS          5U
 #define SEND_MS            10U
 #define CAL_SAMPLES        32U
-#define STICK_X_INVERT     false
+#define STICK_X_INVERT     true
 #define STICK_Y_INVERT     false
 #define LED_ACTIVE         GPIO_PIN_SET
 
