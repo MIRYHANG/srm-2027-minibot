@@ -139,8 +139,8 @@ static bool ReadAxes(uint16_t *x, uint16_t *y)
         return false;
     }
 
-    *x = adc_dma[0]; /* rank 1：PA0 / X */
-    *y = adc_dma[1]; /* rank 2：PA1 / Y */
+    *x = adc_dma[0]; /* rank 1：PA1 / X */
+    *y = adc_dma[1]; /* rank 2：PA2 / Y */
 
     return *x <= HH_ADC_MAX && *y <= HH_ADC_MAX;
 }

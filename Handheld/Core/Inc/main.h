@@ -63,9 +63,9 @@ void Error_Handler(void);
 #define LED_STATUS2_GPIO_Port GPIOC
 #define JOY_BTN_Pin GPIO_PIN_2
 #define JOY_BTN_GPIO_Port GPIOC
-#define JOY_X_Pin GPIO_PIN_0
+#define JOY_X_Pin GPIO_PIN_1
 #define JOY_X_GPIO_Port GPIOA
-#define JOY_Y_Pin GPIO_PIN_1
+#define JOY_Y_Pin GPIO_PIN_2
 #define JOY_Y_GPIO_Port GPIOA
 #define NRF_CSN_Pin GPIO_PIN_4
 #define NRF_CSN_GPIO_Port GPIOA
