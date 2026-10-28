@@ -9,12 +9,22 @@
 // 单次传输超时；总线卡死时任务最多等这么久，不能用 HAL_MAX_DELAY
 #define I2C_BUS_HAL_TIMEOUT_MS 10U
 
+/**
+ * @brief 总线是否被占用
+ * @note 只有 SensorTask 使用 I2C2，传输开始前总线忙说明 SCL 或 SDA 被拉死；
+ *       HAL 等待 BUSY 固定 25 ms，不受上面的超时控制，扫描地址时会拖垮任务心跳，所以直接失败
+ */
+static bool BusBusy(I2C_HandleTypeDef *hi2c)
+{
+    return __HAL_I2C_GET_FLAG(hi2c, I2C_FLAG_BUSY) != RESET;
+}
+
 static bool HalRead(void *ctx, uint8_t addr7, uint8_t reg,
                     uint8_t *data, uint16_t len)
 {
     I2C_HandleTypeDef *hi2c = ctx;
 
-    if (hi2c == NULL || data == NULL || len == 0U || addr7 > 0x7FU)
+    if (hi2c == NULL || data == NULL || len == 0U || addr7 > 0x7FU || BusBusy(hi2c))
     {
         return false;
     }
@@ -30,7 +40,7 @@ static bool HalWrite(void *ctx, uint8_t addr7, uint8_t reg,
 {
     I2C_HandleTypeDef *hi2c = ctx;
 
-    if (hi2c == NULL || data == NULL || len == 0U || addr7 > 0x7FU)
+    if (hi2c == NULL || data == NULL || len == 0U || addr7 > 0x7FU || BusBusy(hi2c))
     {
         return false;
     }
