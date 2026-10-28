@@ -6,6 +6,7 @@
 
 #include <math.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 
 // 数值部分统一 7 个字符宽，单位对齐在同一列
@@ -204,5 +205,90 @@ void PowerDisplay_FormatBattery(BatteryLevel_t level, uint8_t percent,
     }
 
     const char *parts[] = {"BAT ", number, "% ", BatteryLevelText(level)};
+    Compose(line, parts, sizeof(parts) / sizeof(parts[0]));
+}
+
+/**
+ * @brief 取后三位，补零到 3 位，例如 1045 → "045"
+ */
+static void FormatLast3(char out[4], uint32_t value)
+{
+    value %= 1000U;
+    out[0] = (char)('0' + value / 100U);
+    out[1] = (char)('0' + (value / 10U) % 10U);
+    out[2] = (char)('0' + value % 10U);
+    out[3] = '\0';
+}
+
+void PowerDisplay_FormatRemote(const PowerDisplayRemote_t *remote,
+                               PowerDisplayLine_t line)
+{
+    if (line == NULL)
+    {
+        return;
+    }
+
+    if (remote == NULL)
+    {
+        line[0] = '\0';
+        return;
+    }
+
+    static const char HEX[] = "0123456789ABCDEF";
+
+    char bytes[4];
+    char frames[4];
+    FormatLast3(bytes, remote->rx_bytes);
+    FormatLast3(frames, remote->rx_frames);
+
+    char switches[3] = {'-', '-', '\0'};
+    if (remote->online)
+    {
+        switches[0] = remote->s1 ? '1' : '0';
+        switches[1] = remote->s2 ? '1' : '0';
+    }
+
+    char safety[3] = {HEX[(remote->safety >> 4) & 0x0FU], HEX[remote->safety & 0x0FU], '\0'};
+
+    const char *parts[] = {"R", bytes, " F", frames, " S", switches,
+                           " X", safety, " E", remote->enabled ? "1" : "0"};
+    Compose(line, parts, sizeof(parts) / sizeof(parts[0]));
+}
+
+void PowerDisplay_FormatArm(const PowerDisplayRemote_t *remote, uint16_t pulse_us,
+                            PowerDisplayLine_t line)
+{
+    if (line == NULL)
+    {
+        return;
+    }
+
+    if (remote == NULL)
+    {
+        line[0] = '\0';
+        return;
+    }
+
+    char joint[2] = {'?', '\0'};
+    if (remote->arm_joint >= 1U && remote->arm_joint <= 9U)
+    {
+        joint[0] = (char)('0' + remote->arm_joint);
+    }
+
+    // jog 显示为带符号的 3 位百分比，非法值显示横线
+    char jog[5] = {' ', '-', '-', '-', '\0'};
+    if (isfinite(remote->arm_jog) && fabsf(remote->arm_jog) <= 1.0f)
+    {
+        long percent = lroundf(remote->arm_jog * 100.0f);
+        jog[0] = percent < 0L ? '-' : '+';
+        FormatLast3(&jog[1], (uint32_t)labs(percent));
+    }
+
+    char pulse[5];
+    FormatLast3(&pulse[1], pulse_us);
+    pulse[0] = (char)('0' + (pulse_us / 1000U) % 10U);
+
+    const char *parts[] = {"J", joint, " G", jog, " P", pulse,
+                           " A", remote->arm_enabled ? "1" : "0"};
     Compose(line, parts, sizeof(parts) / sizeof(parts[0]));
 }

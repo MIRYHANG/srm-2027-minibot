@@ -194,6 +194,16 @@ static uint32_t radio_check_ms;
 volatile uint32_t radio_rx_count;  // 收到的全部载荷
 volatile uint32_t radio_bad_count; // 其中校验失败的载荷
 
+// 手机链路计数，只由 ProtocolTask 修改
+static uint32_t phone_rx_bytes;
+static uint32_t phone_rx_frames;
+
+// ProtocolTask 写，SensorTask 读，在临界区内整体复制
+static PowerDisplayRemote_t remote_diag;
+
+// ArmTask 写，SensorTask 读；16 位读写是原子的，不需要加锁
+static volatile uint16_t arm_pulse_diag[ARM_JOINT_COUNT];
+
 // 长度为 1，只保存协议任务最近发布的一份完整命令
 static QueueHandle_t robot_cmd_queue = NULL;
 
@@ -497,6 +507,11 @@ void StartArmTask(void const * argument)
       ArmServos_Apply(arm_cycle.pulse_us);
     }
 
+    for (int idx = 0; idx < ARM_JOINT_COUNT; idx++)
+    {
+      arm_pulse_diag[idx] = arm_cycle.pulse_us[idx];
+    }
+
     // 计算失败不等于任务卡死，照常打心跳
     TaskMonitor_Beat(TASK_ID_ARM, HAL_GetTick());
   }
@@ -547,6 +562,28 @@ void StartProtocolTask(void const * argument)
     };
     RobotCmd_Update(&robot_cmd, online, &latest, safety_active, &published.output);
     StatusLed_Update(&published.output, safety_active);
+
+    int arm_joint = RemotePhoneArm_GetSelected(&phone_arm);
+    if (arm_joint < 0)
+    {
+      arm_joint = ARM_J1;
+    }
+
+    PowerDisplayRemote_t diag = {
+      .rx_bytes = phone_rx_bytes,
+      .rx_frames = phone_rx_frames,
+      .online = online,
+      .s1 = latest.enabled,
+      .s2 = latest.stop_requested,
+      .safety = safety_active,
+      .enabled = robot_cmd.enabled,
+      .arm_joint = (uint8_t)(arm_joint + 1),
+      .arm_jog = published.output.arm.motion.jog[arm_joint],
+      .arm_enabled = published.output.arm.enabled
+    };
+    taskENTER_CRITICAL();
+    remote_diag = diag;
+    taskEXIT_CRITICAL();
     if (Spi1Bus_Lock(HANDHELD_SPI_LOCK_TIMEOUT_MS))
     {
       HandheldRadio_PublishStatus(&robot_cmd, safety_active);
@@ -855,9 +892,14 @@ static void PhoneRemote_Update(void)
       break;
     }
 
+    phone_rx_bytes++;
+
     // 使用字节实际到达的时间，而不是当前处理时间
-    RemotePhone_ProcessByte(&phone_parser, &remote_input, &phone_arm,
-                            item.byte, item.received_ms);
+    if (RemotePhone_ProcessByte(&phone_parser, &remote_input, &phone_arm,
+                                item.byte, item.received_ms))
+    {
+      phone_rx_frames++;
+    }
   }
 
   // 处理过程中也可能出现中断异常，不能使用刚解析的命令
@@ -1070,6 +1112,20 @@ static void Oled_Update(void)
   PowerDisplay_Format(&power_reading, power_reading_valid, reset_cause, oled_lines);
   PowerDisplay_FormatBattery(battery_level, BatteryMonitor_Percent(battery_monitor.filtered_v),
                              oled_lines[5]);
+
+  PowerDisplayRemote_t diag;
+  taskENTER_CRITICAL();
+  diag = remote_diag;
+  taskEXIT_CRITICAL();
+  PowerDisplay_FormatRemote(&diag, oled_lines[1]);
+
+  // 标题行换成机械臂诊断
+  uint16_t pulse_us = 0U;
+  if (diag.arm_joint >= 1U && diag.arm_joint <= ARM_JOINT_COUNT)
+  {
+    pulse_us = arm_pulse_diag[diag.arm_joint - 1U];
+  }
+  PowerDisplay_FormatArm(&diag, pulse_us, oled_lines[0]);
 
   for (uint8_t page = 0U; page < POWER_DISPLAY_LINES; page++)
   {

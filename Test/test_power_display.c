@@ -145,6 +145,71 @@ static void TestBatteryLine(void)
     PowerDisplay_FormatBattery(BATTERY_OK, 50U, NULL);
 }
 
+static void TestRemoteLine(void)
+{
+    PowerDisplayLine_t line;
+
+    PowerDisplayRemote_t remote = {
+        .rx_bytes = 1123U,
+        .rx_frames = 45U,
+        .online = true,
+        .s1 = true,
+        .s2 = false,
+        .safety = 0x10U,
+        .enabled = false
+    };
+    PowerDisplay_FormatRemote(&remote, line);
+    assert(strcmp(line, "R123 F045 S10 X10 E0") == 0);
+
+    // 离线时不显示开关状态
+    remote.online = false;
+    remote.safety = 0x00U;
+    remote.enabled = true;
+    PowerDisplay_FormatRemote(&remote, line);
+    assert(strcmp(line, "R123 F045 S-- X00 E1") == 0);
+
+    remote.safety = 0x3FU;
+    PowerDisplay_FormatRemote(&remote, line);
+    assert(strcmp(line, "R123 F045 S-- X3F E1") == 0);
+
+    PowerDisplay_FormatRemote(NULL, line);
+    assert(strcmp(line, "") == 0);
+    PowerDisplay_FormatRemote(&remote, NULL);
+}
+
+static void TestArmLine(void)
+{
+    PowerDisplayLine_t line;
+
+    PowerDisplayRemote_t remote = {
+        .arm_joint = 1U,
+        .arm_jog = 1.0f,
+        .arm_enabled = true
+    };
+    PowerDisplay_FormatArm(&remote, 1500U, line);
+    assert(strcmp(line, "J1 G+100 P1500 A1") == 0);
+
+    remote.arm_joint = 6U;
+    remote.arm_jog = -0.456f;
+    remote.arm_enabled = false;
+    PowerDisplay_FormatArm(&remote, 833U, line);
+    assert(strcmp(line, "J6 G-046 P0833 A0") == 0);
+
+    remote.arm_jog = 0.0f;
+    PowerDisplay_FormatArm(&remote, 2500U, line);
+    assert(strcmp(line, "J6 G+000 P2500 A0") == 0);
+
+    // 非法 jog 和关节显示占位符
+    remote.arm_joint = 0U;
+    remote.arm_jog = NAN;
+    PowerDisplay_FormatArm(&remote, 2500U, line);
+    assert(strcmp(line, "J? G --- P2500 A0") == 0);
+
+    PowerDisplay_FormatArm(NULL, 0U, line);
+    assert(strcmp(line, "") == 0);
+    PowerDisplay_FormatArm(&remote, 0U, NULL);
+}
+
 int main(void)
 {
     TestValidReading();
@@ -153,6 +218,8 @@ int main(void)
     TestResetCauses();
 
     TestBatteryLine();
+    TestRemoteLine();
+    TestArmLine();
 
     puts("Power display tests passed");
     return 0;
