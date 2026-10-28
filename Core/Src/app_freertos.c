@@ -88,8 +88,9 @@
 #define OLED_RETRY_PERIODS   10U  // 初始化失败后每 10 个周期（约 1 s）重试一次
 
 // 急停和驱动故障输入，引脚已在 CubeMX 中配置为上拉输入
-// TODO：按急停电路确认。常闭开关接地时，按下或断线都读到高电平
-#define ESTOP_ACTIVE_LEVEL          GPIO_PIN_SET
+// 急停按下时 PE10 接地，读到低电平；未接急停或松开时由上拉读到高电平
+// 注意：急停线断开时读到高电平，不会触发急停
+#define ESTOP_ACTIVE_LEVEL          GPIO_PIN_RESET
 // TODO：按驱动芯片确认。nFAULT 通常为低电平有效的开漏输出
 #define MOTOR_FAULT_ACTIVE_LEVEL    GPIO_PIN_RESET
 
