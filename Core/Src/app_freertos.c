@@ -50,11 +50,6 @@
 #include "nrf_link.h"
 #include "handheld_packet.h"
 #include "remote_handheld.h"
-#include "spi1_bus.h"
-#include "spi.h"
-#include "bmi088.h"
-#include "imu_yaw.h"
-#include "heading_hold.h"
 #include "battery_monitor.h"
 /* USER CODE END Includes */
 
@@ -109,30 +104,9 @@ typedef struct
 #define HANDHELD_RADIO_RETRY_MS   100U // 配置失败后的重试间隔
 #define HANDHELD_RADIO_RX_BUDGET  3U   // 每周期最多读几包，等于 RX FIFO 深度
 #define HANDHELD_RADIO_CHECK_MS   100U // 每 100 ms 回读一次模块配置
-#define HANDHELD_SPI_LOCK_TIMEOUT_MS 2U // SPI1 与 BMI088 共用，拿不到锁就跳过本周期，靠手柄超时兜底
-
-// BMI088 航向
-#define IMU_PERIOD_MS            5U    // 200 Hz 采样
-#define IMU_RETRY_MS             1000U // 初始化失败后的重试间隔；初始化要占用 SPI1 约 50 ms，不宜太频繁
-#define IMU_INIT_LOCK_TIMEOUT_MS 5U
-#define IMU_READ_LOCK_TIMEOUT_MS 1U    // 拿不到锁就跳过本次采样，不算错误
-#define IMU_ERROR_LIMIT          10U   // 连续读失败这么多次，重新初始化
-#define IMU_STALE_MS             20U   // 底盘读到的航向超过这么久没更新，视为无效
-// TODO：按 BMI088 在车上的安装方向确认。芯片平放、Z 轴朝上时，逆时针转动 Z 轴角速度为正
-#define IMU_YAW_AXIS             2U    // 0=X，1=Y，2=Z
-#define IMU_YAW_SIGN             1.0f  // 逆时针转动时读数为负就改成 -1.0f
-#define IMU_RAD_TO_DEG           57.29577951f
 
 // 电池监测
 #define BATTERY_UPDATE_DT_S 0.1f // SensorTask 周期 100 ms
-
-typedef struct
-{
-  float yaw_deg;     // 航向，逆时针为正
-  float rate_dps;    // 角速度，逆时针为正
-  bool valid;        // 已完成零偏标定
-  uint32_t stamp_ms; // ImuTask 发布的时间
-} ImuPublished_t;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -226,18 +200,6 @@ static ResetCause_t reset_cause = RESET_CAUSE_UNKNOWN;
 static BatteryMonitor_t battery_monitor;
 static volatile BatteryLevel_t battery_level = BATTERY_UNKNOWN;
 
-// 以下状态只由 ImuTask 访问；imu_yaw 可在调试器里直接查看航向和零偏
-static Bmi088_t bmi088;
-static ImuYaw_t imu_yaw;
-
-// 长度为 1，只保存 ImuTask 最近发布的航向
-static QueueHandle_t imu_queue = NULL;
-
-// 只由底盘任务访问
-static HeadingHold_t heading_hold;
-
-osThreadId ImuTaskHandle;
-
 /* USER CODE END Variables */
 osThreadId ChassisControlTHandle;
 osThreadId ArmTaskHandle;
@@ -271,11 +233,6 @@ static bool PowerSensor_Start(void);
 static void PowerSensor_Update(void);
 static ResetCause_t ResetCause_FromFlags(uint32_t flags);
 static void Oled_Update(void);
-static void Bmi088_DelayMs(uint32_t ms);
-static bool ImuSensor_Start(void);
-static bool ImuSensor_ReadYawRate(float *raw_dps, bool *skipped);
-static bool Imu_GetLatest(ImuPublished_t *out);
-void StartImuTask(void const * argument);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -340,11 +297,6 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
-  // SPI1 由 BMI088（ImuTask）和 NRF24（ProtocolTask）共用
-  if (!Spi1Bus_Init())
-  {
-    Error_Handler();
-  }
   /* USER CODE END RTOS_MUTEX */
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
@@ -359,12 +311,6 @@ void MX_FREERTOS_Init(void) {
   /* add queues, ... */
   robot_cmd_queue = xQueueCreate(1, sizeof(RobotPublished_t));
   if (robot_cmd_queue == NULL)
-  {
-    Error_Handler();
-  }
-
-  imu_queue = xQueueCreate(1, sizeof(ImuPublished_t));
-  if (imu_queue == NULL)
   {
     Error_Handler();
   }
@@ -389,9 +335,6 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
-  // 放在 USER CODE 区，CubeMX 重新生成时不会被删掉
-  osThreadDef(ImuTask, StartImuTask, osPriorityNormal, 0, 256);
-  ImuTaskHandle = osThreadCreate(osThread(ImuTask), NULL);
   /* USER CODE END RTOS_THREADS */
 
 }
@@ -447,14 +390,7 @@ void StartChassisControlTask(void const * argument)
     }
     else
     {
-      // 平移且没按自转键时，用 IMU 航向修正 turn，防止跑偏
-      ChassisCmd_t chassis = command.chassis;
-      ImuPublished_t imu;
-      bool imu_valid = Imu_GetLatest(&imu);
-      chassis.turn = HeadingHold_Update(&heading_hold, &chassis, imu_valid,
-                                        imu.yaw_deg, imu.rate_dps, dt_s);
-
-      Chassis_UpdateFromCmd(&chassis);
+      Chassis_UpdateFromCmd(&command.chassis);
       ChassisSpeed_Update(dt_s);
     }
   }
@@ -542,13 +478,7 @@ void StartProtocolTask(void const * argument)
   {
     // 接收并解析手机数据，有效帧存进 remote_input
     PhoneRemote_Update();
-
-    // 锁加在调用处：HandheldRadio_Update 有多处提前 return，加在函数里容易漏解锁
-    if (Spi1Bus_Lock(HANDHELD_SPI_LOCK_TIMEOUT_MS))
-    {
-      HandheldRadio_Update();
-      Spi1Bus_Unlock();
-    }
+    HandheldRadio_Update();
 
     RemoteCommand_t latest;
     bool online = RemoteInput_GetLatest(&remote_input, HAL_GetTick(),
@@ -584,12 +514,8 @@ void StartProtocolTask(void const * argument)
     taskENTER_CRITICAL();
     remote_diag = diag;
     taskEXIT_CRITICAL();
-    if (Spi1Bus_Lock(HANDHELD_SPI_LOCK_TIMEOUT_MS))
-    {
-      HandheldRadio_PublishStatus(&robot_cmd, safety_active);
-      Spi1Bus_Unlock();
-    }
-    
+    HandheldRadio_PublishStatus(&robot_cmd, safety_active);
+
     // 长度为 1 的队列始终覆盖为最新命令，不积累历史命令
     if (xQueueOverwrite(robot_cmd_queue, &published) != pdPASS)
     {
@@ -678,9 +604,6 @@ static void Chassis_Stop(void)
   PID_Clear(&speed_pid_fr);
   PID_Clear(&speed_pid_rl);
   PID_Clear(&speed_pid_rr);
-
-  // 下次开动时重新锁定当前航向
-  HeadingHold_Reset(&heading_hold);
 }
 
 /**
@@ -1274,161 +1197,6 @@ static void HandheldRadio_PublishStatus(const RobotCmd_t *robot, uint8_t safety_
   if (HhStatus_Encode(&status, buf, sizeof(buf)) == HH_STATUS_LEN)
   {
     (void)NrfLink_QueueAck(buf, (uint8_t)sizeof(buf));
-  }
-}
-/**
- * @brief 给 BMI088 驱动用的延时
- * @note osDelay(n) 实际等待 n-1～n 个 tick，多等 1 个 tick 保证不短于 ms
- */
-static void Bmi088_DelayMs(uint32_t ms)
-{
-  osDelay(ms + 1U);
-}
-
-/**
- * @brief 初始化 BMI088，成功后重新开始零偏标定
- * @note 初始化期间占用 SPI1 约 50 ms，手柄接收会跳过这几个周期
- */
-static bool ImuSensor_Start(void)
-{
-  const Bmi088Config_t config = {
-    .hspi = &hspi1,
-    .acc_cs_port = BMI_ACC_CS_GPIO_Port,
-    .acc_cs_pin = BMI_ACC_CS_Pin,
-    .gyro_cs_port = BMI_GYRO_CS_GPIO_Port,
-    .gyro_cs_pin = BMI_GYRO_CS_Pin,
-    .delay_ms = Bmi088_DelayMs,
-    .acc_range = BMI088_ACC_RANGE_6G,
-    .gyro_range = BMI088_GYRO_RANGE_1000DPS,
-  };
-
-  if (!Spi1Bus_Lock(IMU_INIT_LOCK_TIMEOUT_MS))
-  {
-    return false;
-  }
-  Bmi088Status_t status = Bmi088_Init(&bmi088, &config);
-  Spi1Bus_Unlock();
-
-  ImuYaw_Init(&imu_yaw);
-  return status == BMI088_OK;
-}
-
-/**
- * @brief 读一次竖直轴角速度，已换算成 °/s、逆时针为正，未减零偏
- * @param skipped 拿不到 SPI1 锁时置 true，此时返回 false 但不算读取失败
- */
-static bool ImuSensor_ReadYawRate(float *raw_dps, bool *skipped)
-{
-  *skipped = false;
-
-  if (!Spi1Bus_Lock(IMU_READ_LOCK_TIMEOUT_MS))
-  {
-    *skipped = true;
-    return false;
-  }
-  Bmi088Sample_t sample;
-  Bmi088Status_t status = Bmi088_ReadSample(&bmi088, &sample);
-  Spi1Bus_Unlock();
-
-  if (status != BMI088_OK)
-  {
-    return false;
-  }
-
-  *raw_dps = sample.gyro[IMU_YAW_AXIS] * IMU_YAW_SIGN * IMU_RAD_TO_DEG;
-  return true;
-}
-
-/**
- * @brief 读取最近发布的航向，不从队列中取走
- * @return 有数据、已完成标定且未过期返回 true；否则输出全零并返回 false
- */
-static bool Imu_GetLatest(ImuPublished_t *out)
-{
-  *out = (ImuPublished_t){0};
-
-  ImuPublished_t published;
-  if (imu_queue == NULL || xQueuePeek(imu_queue, &published, 0U) != pdPASS)
-  {
-    return false;
-  }
-
-  if (!published.valid ||
-      (uint32_t)(HAL_GetTick() - published.stamp_ms) > IMU_STALE_MS)
-  {
-    return false;
-  }
-
-  *out = published;
-  return true;
-}
-
-/**
- * @brief 每 5 ms 读一次 BMI088 角速度，积分得到航向并发布
- * @note 上电后车须静止约 2 s 完成零偏标定，标定完成前航向无效，底盘不修正
- * @note IMU 故障不影响行驶，只是不做航向修正
- */
-void StartImuTask(void const * argument)
-{
-  (void)argument;
-
-  ImuYaw_Init(&imu_yaw);
-
-  uint32_t last_wake = osKernelSysTick();
-  uint32_t last_sample = last_wake;
-  uint32_t last_try_ms = HAL_GetTick() - IMU_RETRY_MS; // 第一次立刻尝试
-  uint32_t error_count = 0U;
-
-  for (;;)
-  {
-    osDelayUntil(&last_wake, IMU_PERIOD_MS);
-
-    if (!bmi088.ready)
-    {
-      uint32_t now_ms = HAL_GetTick();
-      if ((uint32_t)(now_ms - last_try_ms) >= IMU_RETRY_MS)
-      {
-        last_try_ms = now_ms;
-        error_count = 0U;
-        (void)ImuSensor_Start();
-        last_sample = osKernelSysTick();
-      }
-
-      ImuPublished_t invalid = {.valid = false, .stamp_ms = HAL_GetTick()};
-      (void)xQueueOverwrite(imu_queue, &invalid);
-    }
-    else
-    {
-      float raw_dps = 0.0f;
-      bool skipped = false;
-
-      if (ImuSensor_ReadYawRate(&raw_dps, &skipped))
-      {
-        // 用两次成功采样之间的时间积分，跳过的周期不会丢掉转过的角度
-        uint32_t now = osKernelSysTick();
-        float dt_s = (float)(now - last_sample) / (float)configTICK_RATE_HZ;
-        last_sample = now;
-        error_count = 0U;
-
-        ImuPublished_t published = {
-          .valid = ImuYaw_Update(&imu_yaw, raw_dps, dt_s),
-          .yaw_deg = imu_yaw.yaw_deg,
-          .rate_dps = imu_yaw.rate_dps,
-          .stamp_ms = HAL_GetTick()
-        };
-        (void)xQueueOverwrite(imu_queue, &published);
-      }
-      else if (!skipped)
-      {
-        error_count++;
-        if (error_count >= IMU_ERROR_LIMIT)
-        {
-          bmi088.ready = false;
-        }
-      }
-    }
-
-    TaskMonitor_Beat(TASK_ID_IMU, HAL_GetTick());
   }
 }
 /* USER CODE END Application */
