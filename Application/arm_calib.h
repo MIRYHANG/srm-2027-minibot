@@ -15,7 +15,7 @@ typedef struct
     float min_val;
     float max_val;
 
-    /*----------用于机械臂限位，与结构组给出的手册限位一致，防止机械臂姿态扭曲-------*/
+    /*----------用于机械臂限位，防止机械臂姿态扭曲-------*/
     uint16_t pulse_at_min_us;
     uint16_t pulse_at_max_us;
 

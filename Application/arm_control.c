@@ -11,12 +11,12 @@
 
 /*-----------------手臂伸出去、夹爪对准地面矿石的姿态，到了矿石旁边先切换到这个姿态，再用摇杆微调--------------*/
 static const ArmPose_t PRESET_GRAB_READY = {
-    {90.0f, 60.0f, 120.0f, 135.0f, 90.0f, ARM_GRIPPER_OPEN} // TODO：实物测量
+    {90.0f, 60.0f, 120.0f, 135.0f, 90.0f, ARM_GRIPPER_OPEN}
 };
 
 /*-----------------把机械臂收拢起来的姿态，用于行驶和运输时，重心低--------------------*/
 static const ArmPose_t PRESET_STOW = {
-    {90.0f, 30.0f, 30.0f, 90.0f, 90.0f, ARM_GRIPPER_OPEN}   // TODO：实物测量
+    {90.0f, 30.0f, 30.0f, 90.0f, 90.0f, ARM_GRIPPER_OPEN}
 };
 
 void ArmControl_Init(ArmControl_t *control)

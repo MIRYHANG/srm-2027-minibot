@@ -73,11 +73,11 @@
 
 // INA226 功率采样
 #define POWER_SHUNT_OHM     0.002f // 分流电阻 2 mΩ，量程约 ±40.96 A
-#define POWER_INA226_ADDR   0x40U  // TODO：按 A0/A1 接法确认；找不到时自动扫描 0x40～0x4F
+#define POWER_INA226_ADDR   0x40U  // 按 A0/A1 接法；找不到时自动扫描 0x40～0x4F
 #define POWER_RETRY_PERIODS 10U    // 初始化失败后每 10 个周期（约 1 s）重试一次
 
 // OLED 功率显示
-#define OLED_ADDR            SSD1306_ADDR_LOW // TODO：按模块 SA0 接法确认，少数模块是 0x3D
+#define OLED_ADDR            SSD1306_ADDR_LOW // 按模块 SA0 接法，少数模块是 0x3D
 #define OLED_POWER_UP_MS     100U // 上电后等电源稳定再初始化
 #define OLED_REFRESH_PERIODS 5U   // 每 5 个周期（约 500 ms）刷新一次
 #define OLED_RETRY_PERIODS   10U  // 初始化失败后每 10 个周期（约 1 s）重试一次
@@ -86,16 +86,16 @@
 // 急停按下时 PE10 接地，读到低电平；未接急停或松开时由上拉读到高电平
 // 注意：急停线断开时读到高电平，不会触发急停
 #define ESTOP_ACTIVE_LEVEL          GPIO_PIN_RESET
-// TODO：按驱动芯片确认。nFAULT 通常为低电平有效的开漏输出
+// DRV8873H 的 nFAULT 为低电平有效的开漏输出
 #define MOTOR_FAULT_ACTIVE_LEVEL    GPIO_PIN_RESET
 // 临时：四路驱动故障都不检查
 // DRV8873H 的 nOL 接地，运行中开路检测在小电流、小占空比时会误报并锁存 nFAULT，
 // 误报时 H 桥照常输出；过流和过热由芯片自己关断输出
-// TODO：nOL 改接 DVDD 后改回 0U
+// nOL 改接 DVDD 后改回 0U
 #define MOTOR_FAULT_IGNORE_MASK     (SAFETY_FAULT_FL | SAFETY_FAULT_FR | SAFETY_FAULT_RL | SAFETY_FAULT_RR)
 
 // 状态灯
-#define LED_ON_LEVEL           GPIO_PIN_SET   // TODO：按 LED 接法确认
+#define LED_ON_LEVEL           GPIO_PIN_SET
 #define LED_OFF_LEVEL          GPIO_PIN_RESET
 #define LED_RUN_TOGGLE_PERIODS 100U // ProtocolTask 5 ms * 100，LED_RUN 每 500 ms 翻转一次
 
@@ -144,7 +144,6 @@ static Servo_t servo_5;
 static Servo_t servo_6;
 
 // 舵机通道按关节顺序排列：J1～J5、夹爪
-// TODO：和机械组确认 servo_1～6 与关节的对应关系
 static Servo_t *const arm_servos[ARM_JOINT_COUNT] = {
   &servo_1, &servo_2, &servo_3, &servo_4, &servo_5, &servo_6
 };

@@ -17,7 +17,6 @@
 #define CHASSIS_GEAR2_MAX_RPM       250.0f
 #define CHASSIS_GEAR3_MAX_RPM       300.0f
 
-// TODO: 依旧数值待定
 /*------------自转的转动系数-----------*/
 #define CHASSIS_TURN_SCALE          1.0f
 
