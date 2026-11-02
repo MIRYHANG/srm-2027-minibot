@@ -1,0 +1,102 @@
+/*********************************************************************
+*  Ozone 工程文件：小车主控（STM32G474VE）
+*
+*  打开前先构建：cmake --build build/Debug
+*  J-Link 不支持高速采样（HSS），Data Sampling 用不了；
+*  下面的观察项都在 Watched Data 窗口里，按 10 Hz 实时刷新
+*  观察项会被 Ozone 记进 XiaoSai.jdebug.user；窗口里出现重复项时，
+*  删掉 .user 文件或下面的 Watch.Add 行即可
+**********************************************************************/
+
+void OnProjectLoad (void) {
+  Project.SetDevice ("STM32G474VE");
+  Project.SetHostIF ("USB", "");
+  Project.SetTargetIF ("SWD");
+  Project.SetTIFSpeed ("4 MHz");
+  Project.AddSvdFile ("$(InstallDir)/Config/CPU/Cortex-M4F.svd");
+  Project.SetOSPlugin ("FreeRTOSPlugin_CM4");
+  File.Open ("$(ProjectDir)/build/Debug/XiaoSai.elf");
+
+  // ---------- 运行状态 ----------
+  Watch.Add ("uwTick");                 // 一直在涨说明程序在跑
+  Edit.RefreshRate ("uwTick", 10);
+  Watch.Add ("reset_cause");            // 上次复位原因
+  Edit.RefreshRate ("reset_cause", 10);
+  Watch.Add ("g_reset_stats");          // 本次上电以来各原因的复位次数
+  Edit.RefreshRate ("g_reset_stats", 10);
+
+  // ---------- 遥控链路 ----------
+  Watch.Add ("remote_input.selected");  // 2 = 手柄
+  Edit.RefreshRate ("remote_input.selected", 10);
+  Watch.Add ("radio_ready");
+  Edit.RefreshRate ("radio_ready", 10);
+  Watch.Add ("radio_rx_count");
+  Edit.RefreshRate ("radio_rx_count", 10);
+  Watch.Add ("radio_bad_count");
+  Edit.RefreshRate ("radio_bad_count", 10);
+  Watch.Add ("remote_input.handheld.command");
+  Edit.RefreshRate ("remote_input.handheld.command", 10);
+
+  // ---------- 使能与安全 ----------
+  Watch.Add ("remote_diag");            // online、s1、s2、safety、enabled，和 OLED 第二行对应
+  Edit.RefreshRate ("remote_diag", 10);
+  Watch.Add ("robot_cmd");              // enabled、seen_disable、gear
+  Edit.RefreshRate ("robot_cmd", 10);
+  Watch.Add ("safety_input.active");    // 1/2/4/8 驱动故障，0x10 急停，0x20 欠压
+  Edit.RefreshRate ("safety_input.active", 10);
+  Watch.Add ("*(unsigned int*)0x48001010"); // GPIOE->IDR：PE10 急停、PE12～15 驱动 nFAULT
+  Edit.RefreshRate ("*(unsigned int*)0x48001010", 10);
+  Watch.Add ("battery_level");
+  Edit.RefreshRate ("battery_level", 10);
+  Watch.Add ("power_reading");
+  Edit.RefreshRate ("power_reading", 10);
+
+  // ---------- 底盘：目标、实测、PID、输出 ----------
+  Watch.Add ("target_rpm_fl");
+  Edit.RefreshRate ("target_rpm_fl", 10);
+  Watch.Add ("encode_fl");              // speed_rpm、total_count、direction_sign
+  Edit.RefreshRate ("encode_fl", 10);
+  Watch.Add ("motor_fl");               // direction_sign
+  Edit.RefreshRate ("motor_fl", 10);
+  Watch.Add ("speed_pid_fl");           // Kp、Ki、Kd、MaxOut、Improve、IntegralLimit、Output…
+  Edit.RefreshRate ("speed_pid_fl", 10);
+  Watch.Add ("target_rpm_fr");
+  Edit.RefreshRate ("target_rpm_fr", 10);
+  Watch.Add ("encode_fr");
+  Edit.RefreshRate ("encode_fr", 10);
+  Watch.Add ("motor_fr");
+  Edit.RefreshRate ("motor_fr", 10);
+  Watch.Add ("speed_pid_fr");
+  Edit.RefreshRate ("speed_pid_fr", 10);
+  Watch.Add ("target_rpm_rl");
+  Edit.RefreshRate ("target_rpm_rl", 10);
+  Watch.Add ("encode_rl");
+  Edit.RefreshRate ("encode_rl", 10);
+  Watch.Add ("motor_rl");
+  Edit.RefreshRate ("motor_rl", 10);
+  Watch.Add ("speed_pid_rl");
+  Edit.RefreshRate ("speed_pid_rl", 10);
+  Watch.Add ("target_rpm_rr");
+  Edit.RefreshRate ("target_rpm_rr", 10);
+  Watch.Add ("encode_rr");
+  Edit.RefreshRate ("encode_rr", 10);
+  Watch.Add ("motor_rr");
+  Edit.RefreshRate ("motor_rr", 10);
+  Watch.Add ("speed_pid_rr");
+  Edit.RefreshRate ("speed_pid_rr", 10);
+  Watch.Add ("htim1.Instance->CCR1");   // 四路 PWM 比较值，满占空比 8500
+  Edit.RefreshRate ("htim1.Instance->CCR1", 10);
+  Watch.Add ("htim1.Instance->CCR2");
+  Edit.RefreshRate ("htim1.Instance->CCR2", 10);
+  Watch.Add ("htim1.Instance->CCR3");
+  Edit.RefreshRate ("htim1.Instance->CCR3", 10);
+  Watch.Add ("htim1.Instance->CCR4");
+  Edit.RefreshRate ("htim1.Instance->CCR4", 10);
+
+  // ---------- 机械臂 ----------
+  Watch.Add ("arm_pulse_diag");         // 6 路舵机脉宽
+  Edit.RefreshRate ("arm_pulse_diag", 10);
+
+  Edit.DisplayFormat ("safety_input.active", DISPLAY_FORMAT_HEX);
+  Edit.DisplayFormat ("*(unsigned int*)0x48001010", DISPLAY_FORMAT_HEX);
+}

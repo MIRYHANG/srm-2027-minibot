@@ -1,0 +1,57 @@
+/*********************************************************************
+*  Ozone 工程文件：NRF 手柄（STM32F103RC）
+*
+*  打开前先构建：cmake --build build/Debug
+*  J-Link 不支持高速采样（HSS），Data Sampling 用不了；
+*  下面的观察项都在 Watched Data 窗口里，按 10 Hz 实时刷新
+*  观察项会被 Ozone 记进 XiaoSai_NRF.jdebug.user；窗口里出现重复项时，
+*  删掉 .user 文件或下面的 Watch.Add 行即可
+**********************************************************************/
+
+void OnProjectLoad (void) {
+  Project.SetDevice ("STM32F103RC");
+  Project.SetHostIF ("USB", "");
+  Project.SetTargetIF ("SWD");
+  Project.SetTIFSpeed ("4 MHz");
+  Project.AddSvdFile ("$(InstallDir)/Config/CPU/Cortex-M3.svd");
+  Project.AddSvdFile ("$(InstallDir)/Config/Peripherals/STM32F103xx.svd");
+  File.Open ("$(ProjectDir)/build/Debug/XiaoSai_NRF.elf");
+
+  // ---------- 运行状态 ----------
+  Watch.Add ("uwTick");
+  Edit.RefreshRate ("uwTick", 10);
+
+  // ---------- 无线链路 ----------
+  Watch.Add ("radio_ready");
+  Edit.RefreshRate ("radio_ready", 10);
+  Watch.Add ("tx_ok_count");
+  Edit.RefreshRate ("tx_ok_count", 10);
+  Watch.Add ("tx_lost_count");
+  Edit.RefreshRate ("tx_lost_count", 10);
+  Watch.Add ("tx_timeout_count");
+  Edit.RefreshRate ("tx_timeout_count", 10);
+  Watch.Add ("have_status");
+  Edit.RefreshRate ("have_status", 10);
+  Watch.Add ("car_status");            // flags：0 未使能，1 已使能，2/3 小车安全停止
+  Edit.RefreshRate ("car_status", 10);
+
+  // ---------- 使能逻辑 ----------
+  Watch.Add ("logic");                 // enabled、reverse、arm_stopped
+  Edit.RefreshRate ("logic", 10);
+
+  // ---------- 按键与摇杆 ----------
+  Watch.Add ("debounce.stable");       // 位 0 START、1 ESTOP、2 摇杆按下、3 CCW、4 CW、5 ARM_DIR、6 ARM_STOP、7～12 J1～J5 和夹爪
+  Edit.RefreshRate ("debounce.stable", 10);
+  Watch.Add ("adc_dma");               // [0] X、[1] Y 原始值
+  Edit.RefreshRate ("adc_dma", 10);
+  Watch.Add ("calibrated");
+  Edit.RefreshRate ("calibrated", 10);
+  Watch.Add ("input_ok");
+  Edit.RefreshRate ("input_ok", 10);
+  Watch.Add ("forward");
+  Edit.RefreshRate ("forward", 10);
+  Watch.Add ("left");
+  Edit.RefreshRate ("left", 10);
+
+  Edit.DisplayFormat ("debounce.stable", DISPLAY_FORMAT_BINARY);
+}
