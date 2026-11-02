@@ -59,3 +59,5 @@ desktop.ini
 
 # 大体积原始调试数据
 /logs/raw/
+# LibreOffice 打开文档时生成的锁文件
+.~lock.*#
