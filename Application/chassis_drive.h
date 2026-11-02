@@ -12,10 +12,10 @@
 #include "mecanum.h"
 #include "robot_def.h"
 
-// TODO: 数值待定，先放个10，20，30占位
-#define CHASSIS_GEAR1_MAX_RPM       10.0f
-#define CHASSIS_GEAR2_MAX_RPM       20.0f
-#define CHASSIS_GEAR3_MAX_RPM       30.0f
+// 三个挡位摇杆推满时最快那个轮子的转速
+#define CHASSIS_GEAR1_MAX_RPM       200.0f
+#define CHASSIS_GEAR2_MAX_RPM       250.0f
+#define CHASSIS_GEAR3_MAX_RPM       300.0f
 
 // TODO: 依旧数值待定
 /*------------自转的转动系数-----------*/

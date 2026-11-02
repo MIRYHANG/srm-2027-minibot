@@ -61,7 +61,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 // 当前使用的遥控来源：REMOTE_SOURCE_PHONE 手机蓝牙，REMOTE_SOURCE_HANDHELD 自制手柄
-#define REMOTE_ACTIVE_SOURCE REMOTE_SOURCE_PHONE
+#define REMOTE_ACTIVE_SOURCE REMOTE_SOURCE_HANDHELD
 
 // 暂定超时阈值，后续根据实际发送周期确认
 #define PHONE_TIMEOUT_MS 200U
@@ -88,6 +88,11 @@
 #define ESTOP_ACTIVE_LEVEL          GPIO_PIN_RESET
 // TODO：按驱动芯片确认。nFAULT 通常为低电平有效的开漏输出
 #define MOTOR_FAULT_ACTIVE_LEVEL    GPIO_PIN_RESET
+// 临时：四路驱动故障都不检查
+// DRV8873H 的 nOL 接地，运行中开路检测在小电流、小占空比时会误报并锁存 nFAULT，
+// 误报时 H 桥照常输出；过流和过热由芯片自己关断输出
+// TODO：nOL 改接 DVDD 后改回 0U
+#define MOTOR_FAULT_IGNORE_MASK     (SAFETY_FAULT_FL | SAFETY_FAULT_FR | SAFETY_FAULT_RL | SAFETY_FAULT_RR)
 
 // 状态灯
 #define LED_ON_LEVEL           GPIO_PIN_SET   // TODO：按 LED 接法确认
@@ -614,9 +619,9 @@ static void Motor_InitAndStart(void)
   Motor_Init(&motor_fl, &htim1, TIM_CHANNEL_1,
        MOTOR_FL_DIR_GPIO_Port, MOTOR_FL_DIR_Pin, 1);
   Motor_Init(&motor_fr, &htim1, TIM_CHANNEL_2,
-             MOTOR_FR_DIR_GPIO_Port, MOTOR_FR_DIR_Pin, 1);
+             MOTOR_FR_DIR_GPIO_Port, MOTOR_FR_DIR_Pin, -1);
   Motor_Init(&motor_rl, &htim1, TIM_CHANNEL_3,
-             MOTOR_RL_DIR_GPIO_Port, MOTOR_RL_DIR_Pin, 1);
+             MOTOR_RL_DIR_GPIO_Port, MOTOR_RL_DIR_Pin, -1);
   Motor_Init(&motor_rr, &htim1, TIM_CHANNEL_4,
              MOTOR_RR_DIR_GPIO_Port, MOTOR_RR_DIR_Pin, 1);
 
@@ -647,10 +652,10 @@ static void Motor_InitAndStart(void)
  */
 static void Encoder_InitAndStart(void)
 {
-  Encoder_Init(&encode_fl, &htim4,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
-  Encoder_Init(&encode_fr, &htim3,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
-  Encoder_Init(&encode_rl, &htim2,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
-  Encoder_Init(&encode_rr, &htim5,COUNT_PER_REV,DIRECTION_SIGN,SPEED_FILTER_RC_S);
+  Encoder_Init(&encode_fl, &htim4,COUNT_PER_REV,DIRECTION_SIGN_FL,SPEED_FILTER_RC_S);
+  Encoder_Init(&encode_fr, &htim3,COUNT_PER_REV,DIRECTION_SIGN_FR,SPEED_FILTER_RC_S);
+  Encoder_Init(&encode_rl, &htim2,COUNT_PER_REV,DIRECTION_SIGN_RL,SPEED_FILTER_RC_S);
+  Encoder_Init(&encode_rr, &htim5,COUNT_PER_REV,DIRECTION_SIGN_RR,SPEED_FILTER_RC_S);
 
   if (Encoder_Start(&encode_fl) != HAL_OK)
   {
@@ -672,20 +677,27 @@ static void Encoder_InitAndStart(void)
 
 /**
  * @brief 初始化四个车轮的速度 PID 控制器
- * @note 当前 PID 增益为零，仅作占位，不会驱动电机
+ * @note Kp、Ki 为实车调出的值，后轮 Kp 比前轮略大
  */
 static void SpeedPID_InitAll(void)
 {
   PID_Init_Config_s config = {
-    .Kp = 0.0f,
-    .Ki = 0.0f,
     .Kd = 0.0f,
     .MaxOut = 1.0f,
     .Improve = PID_IMPROVE_NONE,
   };
-  PID_Init(&speed_pid_fl,&config);
+
+  config.Kp = 0.016f;
+  config.Ki = 0.04f;
+  PID_Init(&speed_pid_fl, &config);
+  config.Kp = 0.016f;
+  config.Ki = 0.04f;
   PID_Init(&speed_pid_fr, &config);
+  config.Kp = 0.02f;
+  config.Ki = 0.04f;
   PID_Init(&speed_pid_rl, &config);
+  config.Kp = 0.02f;
+  config.Ki = 0.04f;
   PID_Init(&speed_pid_rr, &config);
 }
 
@@ -1092,7 +1104,7 @@ static uint8_t Safety_ReadRaw(void)
     raw |= SAFETY_UNDERVOLT;
   }
 
-  return raw;
+  return (uint8_t)(raw & ~MOTOR_FAULT_IGNORE_MASK);
 }
 
 /**

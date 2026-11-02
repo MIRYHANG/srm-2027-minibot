@@ -405,7 +405,7 @@ static void TestBasicApi(void)
 
     // SetTarget 拒绝空指针和越界位姿
     ArmPose_t invalid = valid;
-    invalid.joint[ARM_J2] = 0.0f;
+    invalid.joint[ARM_J2] = ArmCalib_Get(ARM_J2)->min_val - 1.0f;
     assert(!ArmControl_SetTarget(NULL, &valid));
     assert(!ArmControl_SetTarget(&control, NULL));
     assert(!ArmControl_SetTarget(&control, &invalid));

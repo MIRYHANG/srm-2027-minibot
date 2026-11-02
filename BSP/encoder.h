@@ -9,8 +9,12 @@
 
 #include "tim.h"
 
-#define COUNT_PER_REV 10
-#define DIRECTION_SIGN -1
+#define COUNT_PER_REV 1321  // 输出轴转一圈的定时器计数（实测）
+// 编码器方向修正，往前转读数为正
+#define DIRECTION_SIGN_FL -1
+#define DIRECTION_SIGN_FR 1
+#define DIRECTION_SIGN_RL 1
+#define DIRECTION_SIGN_RR -1
 #define SPEED_FILTER_RC_S 0.01
 
 typedef struct
