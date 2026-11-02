@@ -51,7 +51,7 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, LED_STATUS1_Pin|LED_STATUS2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, LED_STATUS1_Pin|LED_STATUS2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(NRF_CSN_GPIO_Port, NRF_CSN_Pin, GPIO_PIN_SET);
@@ -64,12 +64,10 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : JOY_BTN_Pin CHASSIS_CCW_BTN_Pin CHASSIS_CW_BTN_Pin REMOTE_START_BTN_Pin
-                           REMOTE_ESTOP_BTN_Pin */
-  GPIO_InitStruct.Pin = JOY_BTN_Pin|CHASSIS_CCW_BTN_Pin|CHASSIS_CW_BTN_Pin|REMOTE_START_BTN_Pin
-                          |REMOTE_ESTOP_BTN_Pin;
+  /*Configure GPIO pins : CHASSIS_CCW_BTN_Pin CHASSIS_CW_BTN_Pin REMOTE_START_BTN_Pin REMOTE_ESTOP_BTN_Pin */
+  GPIO_InitStruct.Pin = CHASSIS_CCW_BTN_Pin|CHASSIS_CW_BTN_Pin|REMOTE_START_BTN_Pin|REMOTE_ESTOP_BTN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
@@ -80,6 +78,12 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : JOY_BTN_Pin */
+  GPIO_InitStruct.Pin = JOY_BTN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(JOY_BTN_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : ARM_DIR_TOGGLE_BTN_Pin ARM_STOP_BTN_Pin ARM_J1_BTN_Pin ARM_J2_BTN_Pin
                            ARM_J3_BTN_Pin ARM_J4_BTN_Pin ARM_J5_BTN_Pin ARM_GRIPPER_BTN_Pin */
