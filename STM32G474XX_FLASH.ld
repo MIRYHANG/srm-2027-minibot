@@ -226,6 +226,14 @@ SECTIONS
   PROVIDE( __bss_size = __bss_end - __bss_start );
 
   /* User_heap_stack section, used to check that there is enough RAM left */
+  /* 复位后不清零的变量，例如复位计数；启动代码不会初始化这一段 */
+  .noinit (NOLOAD) : ALIGN(4)
+  {
+    *(.noinit)
+    *(.noinit*)
+    . = ALIGN(4);
+  } >RAM
+
   ._user_heap_stack (NOLOAD) :
   {
     . = ALIGN(8);

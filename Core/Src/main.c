@@ -51,6 +51,21 @@
 /* USER CODE BEGIN PV */
 // 上电时的 RCC->CSR，保存复位原因（看门狗、上电、按键等），供调试和 OLED 显示
 volatile uint32_t g_reset_flags = 0U;
+
+// 复位计数，放在 .noinit 段，复位后保留；断电后 magic 对不上，从零开始
+// 不接调试器跑一段时间，再连上调试器（不要复位）查看
+#define RESET_STATS_MAGIC 0x52535431U
+typedef struct
+{
+  uint32_t magic;
+  uint32_t total; // 本次上电以来的复位次数，不含上电本身
+  uint32_t pin;   // 只有 PIN：复位脚被外部拉低
+  uint32_t power; // BOR：供电电压掉下去
+  uint32_t iwdg;  // 看门狗：程序卡住或出错
+  uint32_t soft;  // 软件复位：一般是调试器发出的
+  uint32_t other;
+} ResetStats_t;
+__attribute__((section(".noinit"))) volatile ResetStats_t g_reset_stats;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -76,6 +91,35 @@ int main(void)
   // 复位标志要在其他代码之前读取，读完清除，否则下次复位时会和旧标志叠在一起
   g_reset_flags = RCC->CSR;
   __HAL_RCC_CLEAR_RESET_FLAGS();
+
+  if (g_reset_stats.magic != RESET_STATS_MAGIC)
+  {
+    g_reset_stats = (ResetStats_t){.magic = RESET_STATS_MAGIC};
+  }
+  else
+  {
+    g_reset_stats.total++;
+    if ((g_reset_flags & RCC_CSR_IWDGRSTF) != 0U)
+    {
+      g_reset_stats.iwdg++;
+    }
+    else if ((g_reset_flags & RCC_CSR_SFTRSTF) != 0U)
+    {
+      g_reset_stats.soft++;
+    }
+    else if ((g_reset_flags & RCC_CSR_BORRSTF) != 0U)
+    {
+      g_reset_stats.power++;
+    }
+    else if ((g_reset_flags & RCC_CSR_PINRSTF) != 0U)
+    {
+      g_reset_stats.pin++;
+    }
+    else
+    {
+      g_reset_stats.other++;
+    }
+  }
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
